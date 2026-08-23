@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Кибер Синдикат</title>
+<title>Бандитский Петербург: Белые Ночи</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -53,7 +53,7 @@ clip-path:polygon(28px 0,100% 0,100% calc(100% - 28px),calc(100% - 28px) 100%,0 
 h1{font-size:56px;line-height:1.05;color:#fcee0a;letter-spacing:6px;font-weight:900;font-style:italic;
 text-shadow:3px 0 rgba(255,0,60,.55),-3px 0 rgba(0,240,255,.55);animation:glitch 3s infinite}
 @keyframes glitch{0%,93%,100%{transform:none}94%{transform:translateX(3px) skewX(-4deg)}96%{transform:translateX(-3px)}98%{transform:skewX(3deg)}}
-h2{margin:14px 0 20px;color:#5ffbf1;font-weight:400;letter-spacing:10px;font-size:20px;text-transform:uppercase}
+h2{margin:14px 0 20px;color:#5ffbf1;font-weight:400;letter-spacing:8px;font-size:22px;text-transform:uppercase}
 button{margin-top:6px;padding:13px 40px;font-size:18px;font-weight:900;letter-spacing:4px;color:#0a0a0a;
 background:#fcee0a;border:none;cursor:pointer;font-style:italic;
 clip-path:polygon(14px 0,100% 0,calc(100% - 14px) 100%,0 100%);transition:all .12s}
@@ -117,9 +117,9 @@ background:rgba(255,0,60,0.2);border-color:rgba(255,0,60,0.5);display:none}
 
 <div id="menu" class="ov">
   <div class="panel">
-    <h1>КИБЕР<br>СИНДИКАТ</h1>
-    <h2>NEON CITY // 2077</h2>
-    <button id="btnStart">ПОГНАЛИ (ОДИН)</button>
+    <h1>БАНДИТСКИЙ<br>ПЕТЕРБУРГ</h1>
+    <h2>Белые Ночи</h2>
+    <button id="btnStart">ПОЕХАЛИ</button>
     <div style="margin-top:14px">
       <button id="btnHost" class="small">ХОСТ</button>
       <span id="roomShow"></span>
@@ -548,13 +548,13 @@ function nearIntersection(x,y){
       if(overlapsBase(x,y,0,0,r+6))continue;
       if(overlapsDealer(x,y,0,0,r+6))continue;
       if(trees.some(t2=>dist(x,y,t2.x,t2.y)<r+t2.r+24))continue;
-      if(pools.some(p=>x>p.x-r-10&&x<p.x+p.w+r+10&&y>p.y-r-10&&y>p.y+p.h+r+10))continue;
+      if(pools.some(p=>x>p.x-r-10&&x<p.x+p.w+r+10&&y>p.y-r-10&&y<p.y+p.h+r+10))continue;
       if(pylons.some(p2=>dist(x,y,p2.x,p2.y)<r+24))continue;
       trees.push({x,y,r});
     }
     for(let t=0;t<3;t++){
       const x=x0+sRand(14,bw-14),y=y0+sRand(14,bh-14);
-      if(placed.some(p=>x>p.x-16&&x<p.x+p.w+16&&y>p.y-16&&y>p.y+p.h+16))continue;
+      if(placed.some(p=>x>p.x-16&&x<p.x+p.w+16&&y>p.y-16&&y<p.y+p.h+16))continue;
       if(overlapsBase(x,y,0,0,20))continue;
       if(overlapsDealer(x,y,0,0,20))continue;
       let bad=false;
@@ -1087,9 +1087,9 @@ function updatePlayerFoot(dt){
 function updatePlayerCar(car){
   let gas,brake,steer;
   if(isMobile){
-    gas=mBtns.fire;
-    brake=joyMove.y>0.3;
-    steer=joyAim.x;
+    gas=mBtns.fire;              // правая кнопка ГАЗ
+    brake=joyMove.y>0.3;          // левый джойстик вниз = тормоз
+    steer=joyMove.x;              // левый джойстик влево/вправо = руль
   }else{
     gas=keys.KeyW;
     brake=keys.KeyS;
@@ -2368,6 +2368,9 @@ function draw(){
   ctx.rect(-200,-200,WORLD+400,WORLD+400);
   for(const b of buildings)ctx.rect(b.x-9,b.y-13,b.w,b.h);
   for(const t of trees){ctx.moveTo(t.x+t.r,t.y);ctx.arc(t.x,t.y,t.r,0,TAU);}
+  // Укрытие и автосалон — фары и свечения не проходят сквозь них
+  ctx.rect(BASE.x-6,BASE.y-8,BASE.w,BASE.h);
+  ctx.rect(DEALER.x-6,DEALER.y-8,DEALER.w,DEALER.h);
   ctx.clip('evenodd');
   drawGroundLights();
   ctx.restore();
@@ -2495,10 +2498,18 @@ function updateHUD(){
   }else baseHud.style.display='none';
   ammoEl.textContent=`ПАТРОНЫ: ${player.ammo}/${MAG} | БОЙЦЫ: ${crew.length}/${MAX_CREW}`;
   timerEl.textContent=fmtTime(gameTime);
-  const fb=document.getElementById('btnFire');
-  if(fb){
-    if(player.inCar){fb.style.display='flex';fb.textContent='ГАЗ';}
-    else{fb.style.display='none';}
+  if(isMobile){
+    const joyAimEl=document.getElementById('joyAim');
+    const fb=document.getElementById('btnFire');
+    if(player.inCar){
+      // В машине: правый джойстик скрывается, кнопка ГАЗ показывается
+      if(joyAimEl)joyAimEl.style.display='none';
+      if(fb){fb.style.display='flex';fb.textContent='ГАЗ';}
+    }else{
+      // Пешком: правый джойстик виден, кнопка скрыта
+      if(joyAimEl)joyAimEl.style.display='';
+      if(fb)fb.style.display='none';
+    }
   }
 }
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Бандитский Петербург: Белые Ночи</title>
+<title>Тёмный город</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -30,7 +30,7 @@ clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(1
 #baseHud{position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:5;color:#5ffbf1;font-size:15px;
 font-weight:700;letter-spacing:2px;font-family:Consolas,monospace;text-shadow:0 0 12px rgba(95,251,241,.5);
 background:rgba(8,10,18,.65);border:1px solid rgba(95,251,241,.35);padding:6px 18px;display:none;pointer-events:none}
-#timer{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:5;color:#a8dce8;font-size:18px;
+#timer{position:fixed;top:14px;right:206px;z-index:5;color:#a8dce8;font-size:18px;
 font-weight:900;letter-spacing:3px;font-family:Consolas,monospace;text-shadow:0 0 10px rgba(168,220,232,.5);
 background:rgba(8,10,18,.72);border:1px solid rgba(168,220,232,.35);padding:7px 18px;pointer-events:none;
 clip-path:polygon(10px 0,calc(100% - 10px) 0,100% 50%,calc(100% - 10px) 100%,10px 100%,0 50%)}
@@ -78,8 +78,8 @@ background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.25);
 border-radius:12px;color:#fff;font-weight:700;font-size:14px;font-family:Consolas,monospace;
 display:flex;align-items:center;justify-content:center}
 .mbtn:active{background:rgba(255,255,255,0.25)}
-#btnFire{right:40px;bottom:180px;width:80px;height:80px;border-radius:50%;font-size:16px;
-background:rgba(255,0,60,0.2);border-color:rgba(255,0,60,0.5);display:none}
+#btnFire{position:absolute;right:40px;bottom:40px;width:120px;height:120px;border-radius:50%;font-size:18px;
+background:rgba(255,0,60,0.15);border:2px solid rgba(255,0,60,0.4);display:none}
 #btnE{right:170px;bottom:60px;width:60px;height:60px;border-radius:50%}
 #btnR{right:170px;bottom:140px;width:50px;height:50px;border-radius:50%;font-size:12px}
 #btnF{left:170px;bottom:60px;width:50px;height:50px;border-radius:50%;font-size:12px}
@@ -117,9 +117,9 @@ background:rgba(255,0,60,0.2);border-color:rgba(255,0,60,0.5);display:none}
 
 <div id="menu" class="ov">
   <div class="panel">
-    <h1>БАНДИТСКИЙ<br>ПЕТЕРБУРГ</h1>
-    <h2>Белые Ночи</h2>
-    <button id="btnStart">ПОЕХАЛИ</button>
+    <h1>ТЁМНЫЙ<br>ГОРОД</h1>
+    <h2>Криминальные Хроники</h2>
+    <button id="btnStart">ПОГНАЛИ</button>
     <div style="margin-top:14px">
       <button id="btnHost" class="small">ХОСТ</button>
       <span id="roomShow"></span>
@@ -1668,10 +1668,10 @@ function updateParts(dt){
   }
 }
 
-/* ===== МУЛЬТИПЛЕЕР (PeerJS, хост-авторитет) ===== */
+/* ===== МУЛЬТИПЛЕЕР (PeerJS, хост-авторитет с предсказанием) ===== */
 let netMode='none',peer=null,hostConns={},remotePlayers={},myNetId=null,hostConn=null,roomCode=null;
-let netPlayers=[],netSendAcc=0;
-const NET_HZ=15;
+let netPlayers=[],netSendAcc=0,lastSnapTime=0;
+const NET_HZ=30;  // 30 Гц для меньшей задержки
 function netRoomCode(){return Math.random().toString(36).slice(2,7).toUpperCase();}
 function netNewRemote(){return{x:BASE.x+BASE.w/2,y:BASE.y+BASE.h+60,a:0,hp:100,ammo:MAG,reloading:0,fireCd:0,
   input:{mx:0,my:0,aimx:0,aimy:0,shoot:false,shift:false}};}
@@ -1726,6 +1726,7 @@ function netBuildSnap(){
     cars:cars.map(c=>({x:c.x,y:c.y,angle:carAngle(c),color:c.color,cop:c.cop,dead:c.dead,deadT:c.deadT,brake:c.brake,ai:c.ai,chasing:c.chasing,parked:c.parked})),
     cops:cops.map(c=>({x:c.x,y:c.y,a:c.a,patrol:c.patrol})),
     gangs:gangs.map(g=>({x:g.x,y:g.y,a:g.a,flash:g.flash})),
+    peds:peds.map(p=>({x:p.x,y:p.y,a:p.a,dead:p.dead,color:p.color,hair:p.hair,walkPhase:p.walkPhase})),
     bullets:bullets.map(b=>({x:b.x,y:b.y,px:b.x-b.vx*1.6,py:b.y-b.vy*1.6,from:b.from})),
     pickups:pickups.map(k=>({x:k.x,y:k.y})),
     money,wanted,gameTime};
@@ -1738,22 +1739,43 @@ function netApplySnap(d){
   for(const cs of d.cops){const c=makeCop(cs.x,cs.y,cs.patrol);c.a=cs.a;cops.push(c);}
   gangs.length=0;
   for(const gs of d.gangs){const g=makeGang(gs.x,gs.y);g.a=gs.a;g.flash=gs.flash;gangs.push(g);}
+  peds.length=0;
+  for(const ps of d.peds){peds.push({x:ps.x,y:ps.y,a:ps.a,dead:ps.dead,color:ps.color,hair:ps.hair,walkPhase:ps.walkPhase,
+    speed:0.6,hp:60,turnT:2,panic:0,deathT:0,stolen:false,stuckT:0});}
   bullets.length=0;
   for(const bs of d.bullets){bullets.push({x:bs.x,y:bs.y,vx:(bs.x-bs.px),vy:(bs.y-bs.py),life:0.2,from:bs.from});}
   pickups.length=0;
   for(const ks of d.pickups){pickups.push({x:ks.x,y:ks.y,amount:0,life:1,phase:0});}
   money=d.money;wanted=d.wanted;gameTime=d.gameTime;
   const me=d.players.find(p=>p.id===myNetId);
-  if(me){player.x=me.x;player.y=me.y;player.a=me.a;player.hp=me.hp;}
+  if(me){
+    // Корректируем позицию если разница большая (больше 50px)
+    const dx=me.x-player.x,dy=me.y-player.y;
+    if(Math.hypot(dx,dy)>50){player.x=me.x;player.y=me.y;}
+    player.a=me.a;player.hp=me.hp;
+  }
   netPlayers=d.players.filter(p=>p.id!==myNetId);
+  lastSnapTime=performance.now();
 }
 function netGuestFrame(dt){
+  // Гость локально симулирует своё движение (предсказание)
+  if(player.inCar){
+    updatePlayerCar(player.inCar);
+  }else{
+    updatePlayerFoot(dt);
+  }
+  
+  // Отправляем ввод хосту
   const mx=(keys.KeyD?1:0)-(keys.KeyA?1:0),my=(keys.KeyS?1:0)-(keys.KeyW?1:0);
   if(hostConn&&hostConn.open)hostConn.send({type:'input',mx,my,aimx:mouse.wx,aimy:mouse.wy,
     shoot:mouse.down,shift:(keys.ShiftLeft||keys.ShiftRight||mBtns.shift)});
-  updateLights(dt);updatePedsAmbient(dt);updateParts(dt);updateBlood(dt);
-  const t=player;
-  cam.z=lerp(cam.z,1,0.04);
+  
+  updateLights(dt);
+  // НЕ вызываем updatePedsAmbient — педы приходят из снепшота
+  updateParts(dt);updateBlood(dt);
+  
+  const t=player.inCar||player;
+  cam.z=lerp(cam.z,player.inCar?0.86:1,0.04);
   cam.x=lerp(cam.x,t.x,0.09);cam.y=lerp(cam.y,t.y,0.09);
   mouse.wx=(mouse.sx-VW/2)/cam.z+cam.x;mouse.wy=(mouse.sy-VH/2)/cam.z+cam.y;
 }
@@ -1814,11 +1836,18 @@ function reset(){
   playerTrail.length=0;blood.length=0;
   bullets.length=0;parts.length=0;cops.length=0;peds.length=0;gangs.length=0;crew.length=0;
   pickups.length=0;floats.length=0;cars.length=0;scorches.length=0;
-  spawnTraffic(40);spawnParked();
-  for(let i=0;i<3;i++)spawnCopCar();
-  for(let i=0;i<5;i++)spawnPatrol();
-  for(let i=0;i<PED_TARGET;i++)spawnPed();
-  for(let i=0;i<GANG_TARGET;i++)spawnGang();
+  
+  // В мультиплеере гость НЕ генерирует NPC — получает их из снепшотов хоста
+  if(netMode==='guest'){
+    // Пустые массивы — NPC придут из снепшота
+  }else{
+    // Хост или одиночная игра — генерируем NPC
+    spawnTraffic(40);spawnParked();
+    for(let i=0;i<3;i++)spawnCopCar();
+    for(let i=0;i<5;i++)spawnPatrol();
+    for(let i=0;i<PED_TARGET;i++)spawnPed();
+    for(let i=0;i<GANG_TARGET;i++)spawnGang();
+  }
   cam.x=player.x;cam.y=player.y;cam.z=1;
 }
 document.getElementById('btnStart').onclick=()=>{netMode='none';document.getElementById('roomCodeHud').style.display='none';initAudio();reset();setState('play');};
@@ -2520,8 +2549,9 @@ function frame(now){
   let dt=(now-last)/1000;last=now;
   dt=Math.min(dt,0.05);
   if(state==='play'){
-    if(netMode==='guest'){netGuestFrame(dt);}
-    else{
+    if(netMode==='guest'){
+      netGuestFrame(dt);
+    }else{
       update(dt);
       if(netMode==='host'){
         for(const id in remotePlayers)netUpdateRemote(remotePlayers[id],dt);

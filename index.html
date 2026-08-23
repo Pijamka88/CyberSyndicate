@@ -79,7 +79,7 @@ border-radius:12px;color:#fff;font-weight:700;font-size:14px;font-family:Consola
 display:flex;align-items:center;justify-content:center}
 .mbtn:active{background:rgba(255,255,255,0.25)}
 #btnFire{right:40px;bottom:180px;width:80px;height:80px;border-radius:50%;font-size:16px;
-background:rgba(255,0,60,0.2);border-color:rgba(255,0,60,0.5)}
+background:rgba(255,0,60,0.2);border-color:rgba(255,0,60,0.5);display:none}
 #btnE{right:170px;bottom:60px;width:60px;height:60px;border-radius:50%}
 #btnR{right:170px;bottom:140px;width:50px;height:50px;border-radius:50%;font-size:12px}
 #btnF{left:170px;bottom:60px;width:50px;height:50px;border-radius:50%;font-size:12px}
@@ -93,7 +93,7 @@ background:rgba(255,0,60,0.2);border-color:rgba(255,0,60,0.5)}
 
 <div id="hud">
   <div id="stats">
-    <span id="money">КРЕДИТЫ: 0</span><span class="sep">|</span>
+    <span id="money">$ 0</span><span class="sep">|</span>
     <span>HP:</span><div id="hpbar"><div id="hpfill"></div></div><span id="hptext">100%</span>
     <span class="sep">|</span><span id="speed">0 км/ч</span>
   </div>
@@ -108,7 +108,7 @@ background:rgba(255,0,60,0.2);border-color:rgba(255,0,60,0.5)}
 <div id="mobileUI">
   <div class="joystick" id="joyMove"><div class="joystick-inner" id="joyMoveInner"></div></div>
   <div class="joystick" id="joyAim"><div class="joystick-inner" id="joyAimInner"></div></div>
-  <div class="mbtn" id="btnFire">ОГОНЬ</div>
+  <div class="mbtn" id="btnFire">ГАЗ</div>
   <div class="mbtn" id="btnE">E</div>
   <div class="mbtn" id="btnR">R</div>
   <div class="mbtn" id="btnF">F</div>
@@ -162,7 +162,7 @@ const C_YEL='#fcee0a',C_CYA='#00f0ff',C_RED='#ff003c',C_MAG='#ff2d78',C_PUR='#b9
 const C_WIN='#ffd27a';
 const CAR_COLLIDE=18;
 const CROSS_Z=50;
-const LANE=32;
+const LANE=26;
 
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
@@ -361,7 +361,7 @@ function setEngine(on){
   }
 }
 
-const WORLD=5950,CELL=850,ROADW=160,BLOCKS=7;
+const WORLD=6800,CELL=850,ROADW=160,BLOCKS=8;
 const ROADS=[];for(let i=1;i<BLOCKS;i++)ROADS.push(CELL*i);
 const STOPDIST=ROADW/2+CROSS_Z+10;
 const CARFRONT=30;
@@ -500,7 +500,10 @@ function nearIntersection(x,y){
       }
       if(srng()<.65){
         for(let tries=0;tries<12;tries++){
-          const sw=sRand(26,70),sh=sRand(6,12);
+          const vertical=srng()<0.3;
+          let sw,sh;
+          if(vertical){sw=sRand(6,12);sh=sRand(26,70);}
+          else{sw=sRand(26,70);sh=sRand(6,12);}
           const sx=rx+sRand(6,Math.max(7,b.w-sw-6));
           const sy=ry+sRand(6,Math.max(7,b.h-sh-6));
           const cand={x:sx,y:sy,w:sw,h:sh};
@@ -545,7 +548,7 @@ function nearIntersection(x,y){
       if(overlapsBase(x,y,0,0,r+6))continue;
       if(overlapsDealer(x,y,0,0,r+6))continue;
       if(trees.some(t2=>dist(x,y,t2.x,t2.y)<r+t2.r+24))continue;
-      if(pools.some(p=>x>p.x-r-10&&x<p.x+p.w+r+10&&y>p.y-r-10&&y<p.y+p.h+r+10))continue;
+      if(pools.some(p=>x>p.x-r-10&&x<p.x+p.w+r+10&&y>p.y-r-10&&y>p.y+p.h+r+10))continue;
       if(pylons.some(p2=>dist(x,y,p2.x,p2.y)<r+24))continue;
       trees.push({x,y,r});
     }
@@ -1064,31 +1067,40 @@ function updatePlayerFoot(dt){
   if(isMobile){
     if(joyAim.active&&Math.hypot(joyAim.x,joyAim.y)>0.2){
       player.a=Math.atan2(joyAim.y,joyAim.x);
+      if(Math.hypot(joyAim.x,joyAim.y)>0.5){
+        if(player.fireCd<=0&&player.reloading<=0){
+          if(player.ammo>0)fireBullet();else startReload();
+        }
+      }
     }
   }else{
     player.a=Math.atan2(mouse.wy-player.y,mouse.wx-player.x);
-  }
-  const wantShoot=isMobile?mBtns.fire:mouse.down;
-  if(wantShoot){
-    if(player.fireCd<=0&&player.reloading<=0){
-      if(player.ammo>0)fireBullet();else startReload();
+    if(mouse.down){
+      if(player.fireCd<=0&&player.reloading<=0){
+        if(player.ammo>0)fireBullet();else startReload();
+      }
     }
   }
   player.fireCd-=dt;
   if(player.reloading>0){player.reloading-=dt;if(player.reloading<=0)player.ammo=MAG;}
 }
 function updatePlayerCar(car){
-  const gas=keys.KeyW||(isMobile&&mBtns.fire);
-  const brake=keys.KeyS||(isMobile&&joyMove.y>0.3);
+  let gas,brake,steer;
+  if(isMobile){
+    gas=mBtns.fire;
+    brake=joyMove.y>0.3;
+    steer=joyAim.x;
+  }else{
+    gas=keys.KeyW;
+    brake=keys.KeyS;
+    steer=(keys.KeyD?1:0)-(keys.KeyA?1:0);
+  }
   if(gas)car.speed+=0.16;
   if(brake)car.speed-=car.speed>0?0.22:0.10;
   if(keys.Space){car.speed*=0.90;car.brake=Math.abs(car.speed)>0.3;}else car.brake=false;
   car.speed*=0.986;
   car.speed=clamp(car.speed,-3.2,9);
   if(Math.abs(car.speed)<0.02&&!gas&&!brake&&!(isMobile&&(joyMove.y<-0.2||joyMove.y>0.2)))car.speed=0;
-  let steer=0;
-  if(isMobile)steer=joyMove.x;
-  else steer=(keys.KeyD?1:0)-(keys.KeyA?1:0);
   car.angle+=steer*0.046*clamp(car.speed/4,-1,1);
   const px=car.x,py=car.y;
   car.x+=Math.cos(car.angle)*car.speed;car.y+=Math.sin(car.angle)*car.speed;
@@ -1215,7 +1227,7 @@ function updateCrewMember(m,idx,dt){
   m.fireCd-=dt;
   if(player.inCar||m.ride)return;
   m.a=player.a;
-  const shooting=isMobile?mBtns.fire:mouse.down;
+  const shooting=isMobile?(joyAim.active&&Math.hypot(joyAim.x,joyAim.y)>0.5):(mouse.down);
   if(shooting&&player.reloading<=0&&player.ammo>0&&state==='play'){
     if(m.fireCd<=0){
       m.fireCd=0.3;m.flash=0.06;
@@ -1680,11 +1692,12 @@ function netJoin(code){
   netMode='guest';
   peer=new Peer();
   peer.on('open',()=>{
+    myNetId=peer.id;
     hostConn=peer.connect('cybersynd-'+code.toUpperCase());
+    hostConn.on('open',()=>{});
     hostConn.on('data',d=>{if(d&&d.type==='snap')netApplySnap(d);});
     hostConn.on('close',()=>{netMode='none';setState('menu');});
   });
-  myNetId=peer.id;
 }
 function netUpdateRemote(rp,dt){
   const sp=rp.input.shift?3.7:2.3;
@@ -2398,7 +2411,7 @@ function draw(){
     ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH);
   }
   drawFog();
-  if(state==='play'){
+  if(state==='play'&&!isMobile){
     ctx.strokeStyle=C_RED;ctx.lineWidth=1.6;
     ctx.beginPath();ctx.arc(mouse.sx,mouse.sy,9,0,TAU);ctx.stroke();
     ctx.beginPath();
@@ -2460,7 +2473,7 @@ function fmtTime(s){
   return (m<10?'0':'')+m+':'+(sec<10?'0':'')+sec;
 }
 function updateHUD(){
-  moneyEl.textContent='КРЕДИТЫ: '+money;
+  moneyEl.textContent='$ '+money;
   hpfill.style.width=Math.max(0,player.hp)+'%';
   hpfill.style.background=player.hp<30?'#b01c34':'linear-gradient(90deg,#5c0f1c,#8f1c30)';
   hpfill.style.boxShadow=player.hp<30?'0 0 10px rgba(255,32,56,.8)':'0 0 8px rgba(143,28,48,.55)';
@@ -2482,7 +2495,10 @@ function updateHUD(){
   ammoEl.textContent=`ПАТРОНЫ: ${player.ammo}/${MAG} | БОЙЦЫ: ${crew.length}/${MAX_CREW}`;
   timerEl.textContent=fmtTime(gameTime);
   const fb=document.getElementById('btnFire');
-  if(fb)fb.textContent=player.inCar?'ГАЗ':'ОГОНЬ';
+  if(fb){
+    if(player.inCar){fb.style.display='flex';fb.textContent='ГАЗ';}
+    else{fb.style.display='none';}
+  }
 }
 
 reset();
@@ -2499,6 +2515,7 @@ function frame(now){
         for(const id in remotePlayers)netUpdateRemote(remotePlayers[id],dt);
         netSendAcc+=dt;
         if(netSendAcc>1/NET_HZ){netBroadcast(netBuildSnap());netSendAcc=0;}
+        netPlayers=Object.values(remotePlayers).map(rp=>({x:rp.x,y:rp.y,a:rp.a,hp:rp.hp,color:'#00f0ff'}));
       }
     }
   }

@@ -55,7 +55,6 @@ button:hover{background:#ff003c;color:#fff;transform:translateY(-2px)}
 .wasted{color:#ff003c;text-shadow:0 0 34px rgba(255,0,60,.7);font-size:66px}
 #deadStats{color:#cfd4de;margin:16px 0 22px;font-size:16px;font-family:Consolas,monospace}
 
-/* мобильное управление */
 #mobileUI{display:none;position:fixed;inset:0;z-index:6;pointer-events:none}
 #mobileUI.active{display:block}
 .joystick{position:absolute;bottom:40px;width:120px;height:120px;border-radius:50%;
@@ -69,19 +68,17 @@ background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.25);
 border-radius:12px;color:#fff;font-weight:700;font-size:14px;font-family:Consolas,monospace;
 display:flex;align-items:center;justify-content:center}
 .mbtn:active{background:rgba(255,255,255,0.25)}
-#btnFire{right:180px;bottom:60px;width:70px;height:70px;border-radius:50%;font-size:16px;
-background:rgba(255,0,60,0.2);border-color:rgba(255,0,60,0.5)}
-#btnE{right:180px;bottom:150px;width:60px;height:60px;border-radius:50%}
-#btnSpace{left:180px;bottom:60px;width:60px;height:60px;border-radius:50%}
-#btnR{right:260px;bottom:100px;width:50px;height:50px;border-radius:50%;font-size:12px}
-#btnF{left:180px;bottom:140px;width:50px;height:50px;border-radius:50%;font-size:12px}
-#btnShift{right:260px;bottom:170px;width:50px;height:50px;border-radius:50%;font-size:11px}
+#btnE{right:170px;bottom:60px;width:60px;height:60px;border-radius:50%}
+#btnR{right:170px;bottom:140px;width:50px;height:50px;border-radius:50%;font-size:12px}
+#btnF{left:170px;bottom:60px;width:50px;height:50px;border-radius:50%;font-size:12px}
+#btnShift{left:170px;bottom:140px;width:50px;height:50px;border-radius:50%;font-size:11px}
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 <div id="scan"></div>
 <canvas id="minimap" width="180" height="180"></canvas>
+<audio id="music" loop preload="auto"></audio>
 
 <div id="hud">
   <div id="stats">
@@ -99,9 +96,7 @@ background:rgba(255,0,60,0.2);border-color:rgba(255,0,60,0.5)}
 <div id="mobileUI">
   <div class="joystick" id="joyMove"><div class="joystick-inner" id="joyMoveInner"></div></div>
   <div class="joystick" id="joyAim"><div class="joystick-inner" id="joyAimInner"></div></div>
-  <div class="mbtn" id="btnFire">ОГОНЬ</div>
   <div class="mbtn" id="btnE">E</div>
-  <div class="mbtn" id="btnSpace">ТОРМОЗ</div>
   <div class="mbtn" id="btnR">R</div>
   <div class="mbtn" id="btnF">F</div>
   <div class="mbtn" id="btnShift">SHIFT</div>
@@ -154,7 +149,12 @@ let VW=0,VH=0;
 function resize(){VW=canvas.width=innerWidth;VH=canvas.height=innerHeight;}
 addEventListener('resize',resize);resize();
 
-/* мобильный UI */
+/* музыка */
+const musicEl=document.getElementById('music');
+musicEl.src='https://raw.githubusercontent.com/Pijamka88/CyberSyndicate/main/theme_cyber.mp3';
+musicEl.loop=true;
+musicEl.volume=0.35;
+
 const isMobile=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
 if(isMobile){
   document.getElementById('mobileUI').classList.add('active');
@@ -162,7 +162,7 @@ if(isMobile){
 }
 const joyMove={x:0,y:0,active:false,touchId:null};
 const joyAim={x:0,y:0,active:false,touchId:null};
-const mBtns={fire:false,e:false,space:false,r:false,f:false,shift:false};
+const mBtns={shift:false};
 
 function setupJoystick(el,inner,joy){
   const rect=()=>el.getBoundingClientRect();
@@ -208,22 +208,23 @@ function setupJoystick(el,inner,joy){
 if(isMobile){
   setupJoystick(document.getElementById('joyMove'),document.getElementById('joyMoveInner'),joyMove);
   setupJoystick(document.getElementById('joyAim'),document.getElementById('joyAimInner'),joyAim);
-  
-  function setupBtn(id,key){
+  /* одноразовые кнопки: срабатывают по нажатию */
+  function actionBtn(id,fn){
     const el=document.getElementById(id);
-    el.addEventListener('touchstart',e=>{e.preventDefault();mBtns[key]=true;},{passive:false});
-    el.addEventListener('touchend',e=>{e.preventDefault();mBtns[key]=false;},{passive:false});
-    el.addEventListener('touchcancel',e=>{mBtns[key]=false;});
+    el.addEventListener('touchstart',e=>{e.preventDefault();if(state==='play')fn();},{passive:false});
+    el.addEventListener('touchend',e=>{e.preventDefault();},{passive:false});
+    el.addEventListener('touchcancel',e=>{e.preventDefault();});
   }
-  setupBtn('btnFire','fire');
-  setupBtn('btnE','e');
-  setupBtn('btnSpace','space');
-  setupBtn('btnR','r');
-  setupBtn('btnF','f');
-  setupBtn('btnShift','shift');
+  actionBtn('btnE',tryEnterExit);
+  actionBtn('btnR',startReload);
+  actionBtn('btnF',trySteal);
+  /* SHIFT — удерживаемая */
+  const sh=document.getElementById('btnShift');
+  sh.addEventListener('touchstart',e=>{e.preventDefault();mBtns.shift=true;},{passive:false});
+  sh.addEventListener('touchend',e=>{e.preventDefault();mBtns.shift=false;},{passive:false});
+  sh.addEventListener('touchcancel',e=>{e.preventDefault();mBtns.shift=false;});
 }
 
-/* звук */
 let AC=null,masterGain=null,noiseBuf=null,sirenOsc=null,engOsc=null,engGain=null;
 function initAudio(){
   if(!AC){
@@ -263,7 +264,7 @@ function sBoom(){
   const og=AC.createGain();og.gain.setValueAtTime(0.8,t);og.gain.exponentialRampToValueAtTime(0.001,t+0.9);
   o.connect(og);og.connect(masterGain);o.start(t);o.stop(t+1);
 }
-function sPickup(){
+function sPickupSnd(){
   if(!AC)return;
   const t=AC.currentTime;
   const o=AC.createOscillator();o.type='square';
@@ -406,15 +407,28 @@ function collidePool(o,r){
   }
 }
 
-function collideCars(o,r){
-  for(const c of cars){
-    if(c.dead)continue;
-    const d=dist(o.x,o.y,c.x,c.y);
-    if(d<r+8&&d>0){
-      const a=Math.atan2(o.y-c.y,o.x-c.x);
-      o.x=c.x+Math.cos(a)*(r+8);o.y=c.y+Math.sin(a)*(r+8);
-    }
+function collideCircleCar(o,r,car){
+  if(car.dead)return;
+  const ang=carAngle(car);
+  const dx=o.x-car.x,dy=o.y-car.y;
+  const cos=Math.cos(ang),sin=Math.sin(ang);
+  const lx=dx*cos+dy*sin,ly=-dx*sin+dy*cos;
+  const hw=19,hh=9.5;
+  const cx=clamp(lx,-hw,hw),cy=clamp(ly,-hh,hh);
+  const ddx=lx-cx,ddy=ly-cy;
+  const d2=ddx*ddx+ddy*ddy;
+  if(d2>=r*r)return;
+  let plx,ply;
+  if(d2>0.0001){
+    const d=Math.sqrt(d2);
+    plx=cx+(ddx/d)*r;ply=cy+(ddy/d)*r;
+  }else{
+    const px=hw-Math.abs(lx),py=hh-Math.abs(ly);
+    if(px<py){plx=(lx>0?1:-1)*(hw+r);ply=ly;}
+    else{plx=lx;ply=(ly>0?1:-1)*(hh+r);}
   }
+  o.x=car.x+plx*cos-ply*sin;
+  o.y=car.y+plx*sin+ply*cos;
 }
 
 function nearIntersection(x,y){
@@ -517,7 +531,7 @@ function nearIntersection(x,y){
     }
     for(let t=0;t<3;t++){
       const x=x0+sRand(14,bw-14),y=y0+sRand(14,bh-14);
-      if(placed.some(p=>x>p.x-16&&x<p.x+p.w+16&&y>p.y-16&&y<p.y+p.h+16))continue;
+      if(placed.some(p=>x>p.x-16&&x<p.x+p.w+16&&y>p.y-16&&y>p.y+p.h+16))continue;
       if(overlapsBase(x,y,0,0,20))continue;
       if(overlapsDealer(x,y,0,0,20))continue;
       pylons.push({x,y,c:srng()<.5?C_CYA:C_MAG});
@@ -841,7 +855,7 @@ function updateCopCarChase(car){
         for(let i=0;i<car.crew;i++){
           const a=car.angle+Math.PI/2*(i===0?1:-1);
           const c=makeCop(car.x+Math.cos(a)*28,car.y+Math.sin(a)*28,false);
-          collideBuildings(c,12);collidePool(c,12);collideCars(c,12);
+          collideBuildings(c,12);collidePool(c,12);
           cops.push(c);
         }
         car.crew=0;
@@ -979,7 +993,7 @@ function trySteal(){
     money+=amt;
     best.stolen=true;
     floats.push(ftext(best.x,best.y-20,'+'+amt+'$',C_YEL));
-    sPickup();
+    sPickupSnd();
   }else{
     addCrime(1);
     best.stolen=true;
@@ -1033,10 +1047,10 @@ function updatePlayerFoot(dt){
   else player.moving=false;
   collideBuildings(player,12);collideDealer(player,12);collidePool(player,12);
   if(baseCd>0)collideBase(player,12);
-  for(const c of cars){const d=dist(player.x,player.y,c.x,c.y);
-    if(d<CAR_COLLIDE&&d>0){const a=Math.atan2(player.y-c.y,player.x-c.x);
-    player.x=c.x+Math.cos(a)*CAR_COLLIDE;player.y=c.y+Math.sin(a)*CAR_COLLIDE;}}
-  
+  for(const c of cars){
+    if(c===player.inCar)continue;
+    collideCircleCar(player,11,c);
+  }
   if(isMobile&&joyAim.active&&Math.hypot(joyAim.x,joyAim.y)>0.2){
     player.a=Math.atan2(joyAim.y,joyAim.x);
     if(Math.hypot(joyAim.x,joyAim.y)>0.5){
@@ -1046,7 +1060,7 @@ function updatePlayerFoot(dt){
     }
   }else{
     player.a=Math.atan2(mouse.wy-player.y,mouse.wx-player.x);
-    if(mBtns.fire||mouse.down){
+    if(mouse.down){
       if(player.fireCd<=0&&player.reloading<=0){
         if(player.ammo>0)fireBullet();else startReload();
       }
@@ -1058,7 +1072,7 @@ function updatePlayerFoot(dt){
 function updatePlayerCar(car){
   if(keys.KeyW||(isMobile&&joyMove.y<-0.2))car.speed+=0.16;
   if(keys.KeyS||(isMobile&&joyMove.y>0.2))car.speed-=car.speed>0?0.22:0.10;
-  if(keys.Space||mBtns.space){car.speed*=0.90;car.brake=Math.abs(car.speed)>0.3;}else car.brake=false;
+  if(keys.Space){car.speed*=0.90;car.brake=Math.abs(car.speed)>0.3;}else car.brake=false;
   car.speed*=0.986;
   car.speed=clamp(car.speed,-3.2,9);
   if(Math.abs(car.speed)<0.02&&!keys.KeyW&&!keys.KeyS&&!(isMobile&&(joyMove.y<-0.2||joyMove.y>0.2)))car.speed=0;
@@ -1177,7 +1191,7 @@ function hireCrew(){
   if(!player.inBase||crew.length>=MAX_CREW||money<HIRE_COST)return;
   money-=HIRE_COST;
   crew.push({x:player.x+rand(-20,20),y:player.y+rand(-20,20),a:player.a,hp:3,fireCd:0,flash:0,ride:false});
-  sPickup();
+  sPickupSnd();
   floats.push(ftext(player.x,player.y-24,'БОЕЦ НАНЯТ',C_MAG));
 }
 function killCrew(m){
@@ -1208,6 +1222,7 @@ function updateCrewMember(m,idx,dt){
     const a=Math.atan2(target.y-m.y,target.x-m.x);
     m.x+=Math.cos(a)*sp;m.y+=Math.sin(a)*sp;
     collideBuildings(m,10);collidePool(m,10);
+    for(const c of cars){collideCircleCar(m,10,c);}
   }
   const dp=dist(m.x,m.y,player.x,player.y);
   if(dp<20&&dp>0){
@@ -1276,7 +1291,8 @@ function updatePed(p,dt){
   if(p.panic>0){
     p.panic-=dt;sp=1.6;
     p.x+=Math.cos(p.a)*sp;p.y+=Math.sin(p.a)*sp;
-    collideBuildings(p,10);collidePool(p,10);collideCars(p,10);collideBase(p,10);
+    collideBuildings(p,10);collidePool(p,10);
+    for(const c of cars){collideCircleCar(p,8,c);}
     if(dist(px0,py0,p.x,p.y)<sp*0.4)p.a+=rand(2,4);
   }else{
     p.turnT-=dt;if(p.turnT<=0){p.turnT=rand(2,5);p.a+=rand(-1.7,1.7);}
@@ -1291,12 +1307,11 @@ function updatePed(p,dt){
       }
       if(!found)p.a+=Math.PI;
     }
-    collideBuildings(p,10);collidePool(p,10);collideCars(p,10);collideBase(p,10);
+    collideBuildings(p,10);collidePool(p,10);
+    for(const c of cars){collideCircleCar(p,8,c);}
   }
   const moved=dist(px0,py0,p.x,p.y);
   if(moved>0.05)p.walkPhase+=moved*0.9;
-  for(const c of cars){const d=dist(p.x,p.y,c.x,c.y);
-    if(d<CAR_COLLIDE&&d>0){const a=Math.atan2(p.y-c.y,p.x-c.x);p.x=c.x+Math.cos(a)*CAR_COLLIDE;p.y=c.y+Math.sin(a)*CAR_COLLIDE;}}
 }
 function separatePeds(){
   for(let i=0;i<peds.length;i++)for(let j=i+1;j<peds.length;j++){
@@ -1338,7 +1353,7 @@ function killGang(g){
   money+=amt;
   floats.push(ftext(g.x,g.y-20,'+'+amt+'$',C_YEL));
   addBlood(g.x,g.y,false);
-  gibs(g.x,g.y);sHit();sPickup();
+  gibs(g.x,g.y);sHit();sPickupSnd();
 }
 function separateGangs(){
   for(let i=0;i<gangs.length;i++){
@@ -1424,7 +1439,8 @@ function copWander(u,dt){
     }
     u.x+=Math.cos(u.a)*sp;u.y+=Math.sin(u.a)*sp;
   }
-  collideBuildings(u,12);collideBase(u,12);collideDealer(u,12);collidePool(u,12);collideCars(u,12);
+  collideBuildings(u,12);collideBase(u,12);collideDealer(u,12);collidePool(u,12);
+  for(const c of cars){collideCircleCar(u,10,c);}
 }
 function updateCop(c,dt){
   c.flash=Math.max(0,c.flash-dt);
@@ -1436,7 +1452,7 @@ function updateCop(c,dt){
       const a=Math.atan2(c.y-player.y,c.x-player.x);
       c.a=a;
       c.x+=Math.cos(a)*1.8;c.y+=Math.sin(a)*1.8;
-      collideBuildings(c,12);collideBase(c,12);collideDealer(c,12);collidePool(c,12);collideCars(c,12);
+      collideBuildings(c,12);collideBase(c,12);collideDealer(c,12);collidePool(c,12);
     }
     return;
   }
@@ -1448,15 +1464,14 @@ function updateCop(c,dt){
     if(c.avoidT>0){ang+=c.avoidDir*1.05;c.avoidT-=dt;}
     const px=c.x,py=c.y;
     c.x+=Math.cos(ang)*COP_SPEED;c.y+=Math.sin(ang)*COP_SPEED;
-    collideBuildings(c,12);collideBase(c,12);collideDealer(c,12);collidePool(c,12);collideCars(c,12);
+    collideBuildings(c,12);collideBase(c,12);collideDealer(c,12);collidePool(c,12);
     if(dist(px,py,c.x,c.y)<COP_SPEED*0.45&&c.avoidT<=0){
       c.avoidT=0.8;c.avoidDir=Math.random()<0.5?1:-1;}
   }
   for(const o of cops){if(o===c)continue;
     const dd=dist(c.x,c.y,o.x,o.y);
     if(dd<22&&dd>0){const a=Math.atan2(c.y-o.y,c.x-o.x);c.x+=Math.cos(a)*0.6;c.y+=Math.sin(a)*0.6;}}
-  for(const o of cars){const dd=dist(c.x,c.y,o.x,o.y);
-    if(dd<CAR_COLLIDE&&dd>0){const a=Math.atan2(c.y-o.y,c.x-o.x);c.x=o.x+Math.cos(a)*CAR_COLLIDE;c.y=o.y+Math.sin(a)*CAR_COLLIDE;}}
+  for(const o of cars){collideCircleCar(c,10,o);}
   c.a=Math.atan2(ty-c.y,tx-c.x);
   c.fireCd-=dt;
   if(c.reloading>0){
@@ -1576,7 +1591,7 @@ function updatePickups(dt){
     if(dist(t.x,t.y,k.x,k.y)<34){
       money+=k.amount;
       floats.push(ftext(k.x,k.y,'+'+k.amount+'$',C_YEL));
-      sPickup();
+      sPickupSnd();
       pickups.splice(i,1);
     }
   }
@@ -1656,7 +1671,8 @@ let state='menu';
 const ovMenu=document.getElementById('menu'),ovPause=document.getElementById('pause'),ovDead=document.getElementById('dead');
 function setState(s){
   state=s;mouse.down=false;
-  if(s!=='play'){setSiren(false);setEngine(false);}
+  if(s!=='play'){setSiren(false);setEngine(false);musicEl.pause();}
+  else{musicEl.play().catch(()=>{});}
   ovMenu.style.display=s==='menu'?'flex':'none';
   ovPause.style.display=s==='pause'?'flex':'none';
   ovDead.style.display=s==='dead'?'flex':'none';

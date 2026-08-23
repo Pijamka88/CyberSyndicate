@@ -208,7 +208,6 @@ function setupJoystick(el,inner,joy){
 if(isMobile){
   setupJoystick(document.getElementById('joyMove'),document.getElementById('joyMoveInner'),joyMove);
   setupJoystick(document.getElementById('joyAim'),document.getElementById('joyAimInner'),joyAim);
-  /* одноразовые кнопки: срабатывают по нажатию */
   function actionBtn(id,fn){
     const el=document.getElementById(id);
     el.addEventListener('touchstart',e=>{e.preventDefault();if(state==='play')fn();},{passive:false});
@@ -218,7 +217,6 @@ if(isMobile){
   actionBtn('btnE',tryEnterExit);
   actionBtn('btnR',startReload);
   actionBtn('btnF',trySteal);
-  /* SHIFT — удерживаемая */
   const sh=document.getElementById('btnShift');
   sh.addEventListener('touchstart',e=>{e.preventDefault();mBtns.shift=true;},{passive:false});
   sh.addEventListener('touchend',e=>{e.preventDefault();mBtns.shift=false;},{passive:false});
@@ -531,9 +529,23 @@ function nearIntersection(x,y){
     }
     for(let t=0;t<3;t++){
       const x=x0+sRand(14,bw-14),y=y0+sRand(14,bh-14);
-      if(placed.some(p=>x>p.x-16&&x<p.x+p.w+16&&y>p.y-16&&y>p.y+p.h+16))continue;
+      if(placed.some(p=>x>p.x-16&&x<p.x+p.w+16&&y>p.y-16&&y<p.y+p.h+16))continue;
       if(overlapsBase(x,y,0,0,20))continue;
       if(overlapsDealer(x,y,0,0,20))continue;
+      /* проверка против зданий в buildings, а не placed */
+      let bad=false;
+      for(const b of buildings){
+        if(x>=b.x-9-16&&x<=b.x+b.w-9+16&&y>=b.y-13-16&&y<=b.y+b.h-13+16){
+          bad=true;break;
+        }
+      }
+      if(bad)continue;
+      /* проверка против деревьев */
+      if(trees.some(t2=>dist(x,y,t2.x,t2.y)<20))continue;
+      /* проверка против бассейнов */
+      if(pools.some(p=>x>=p.x-10&&x<=p.x+p.w+10&&y>=p.y-10&&y<=p.y+p.h+10))continue;
+      /* проверка против других пилонов */
+      if(pylons.some(p2=>dist(x,y,p2.x,p2.y)<20))continue;
       pylons.push({x,y,c:srng()<.5?C_CYA:C_MAG});
     }
   }
@@ -847,7 +859,7 @@ function updateTraffic(car){
 function updateCopCarChase(car){
   const t=player.inCar||player;
   const d=dist(car.x,car.y,t.x,t.y);
-  if(d<220){
+  if(d<250){
     car.speed*=0.8;
     if(Math.abs(car.speed)<0.3){
       car.speed=0;
@@ -1672,7 +1684,7 @@ const ovMenu=document.getElementById('menu'),ovPause=document.getElementById('pa
 function setState(s){
   state=s;mouse.down=false;
   if(s!=='play'){setSiren(false);setEngine(false);musicEl.pause();}
-  else{musicEl.play().catch(()=>{});}
+  else{musicEl.currentTime=0;musicEl.play().catch(()=>{});}
   ovMenu.style.display=s==='menu'?'flex':'none';
   ovPause.style.display=s==='pause'?'flex':'none';
   ovDead.style.display=s==='dead'?'flex':'none';

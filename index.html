@@ -41,8 +41,12 @@
   #trade{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:720px;max-width:95%;
     background:#11140d;border:1px solid #4a5140;z-index:15;max-height:88vh;display:none;flex-direction:column}
   #trade.open{display:flex}
-  #trade header{font-family:'Russo One';padding:14px 20px;border-bottom:1px solid #2c3223;color:#e8ecd9;font-size:18px}
-  #trade header small{display:block;font-family:'Play';color:var(--dim);font-size:12px;letter-spacing:1px;margin-top:3px}
+  #trade header{font-family:'Russo One';padding:14px 20px;border-bottom:1px solid #2c3223;color:#e8ecd9;font-size:18px;
+    display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  #trade header small{display:block;font-family:'Play';color:var(--dim);font-size:12px;letter-spacing:1px;margin-top:3px;font-weight:400}
+  #closeBtn{font-family:'Russo One';font-size:13px;letter-spacing:1px;background:#3a2018;color:#e0a090;
+    border:1px solid #7a4030;padding:8px 16px;cursor:pointer;white-space:nowrap;touch-action:manipulation}
+  #closeBtn:hover{background:#5a2c20;color:#f0c0b0}
   .tcols{display:flex;min-height:280px;overflow-y:auto}
   .tcol{flex:1;padding:14px 18px;border-right:1px solid #2c3223}
   .tcol:last-child{border-right:0}
@@ -72,6 +76,7 @@
   @media (pointer:coarse){
     .row{padding:11px 8px;font-size:15px}
     .row button,.mini{padding:9px 18px;font-size:15px}
+    #closeBtn{padding:12px 20px;font-size:15px}
     button.go{padding:16px 28px}
     h1{font-size:30px}
   }
@@ -96,7 +101,10 @@
 </div>
 
 <div id="trade">
-  <header>СИДОРОВИЧ<small>«Чего надо, сталкер? Только не вздумай грабить»</small></header>
+  <header>
+    <div>СИДОРОВИЧ<small>«Чего надо, сталкер? Только не вздумай грабить»</small></div>
+    <button id="closeBtn">✕ ЗАКРЫТЬ</button>
+  </header>
   <div class="tcols">
     <div class="tcol"><h3>ПРОДАЖА ХЛАМА</h3><div id="sellList"></div><button class="mini" id="sellAll" style="margin-top:10px">Продать всё</button></div>
     <div class="tcol"><h3>ПОКУПКА</h3><div id="buyList"></div></div>
@@ -110,17 +118,14 @@
     <div class="sub">периметр 16 × 16 км · потоковая загрузка секторов</div>
     <div class="brief">
       Ты — сталкер по кличке <b>Штырь</b>. Цель: <b>50 000 рублей</b> — и уходишь.
-      Зона теперь <b>16 × 16 км</b> и грузится секторами: мир генерируется вокруг тебя
-      и уходит в туман позади. Свалка, руины, Агропром, Озеро, Радар, Долина, Затон, Хутор,
-      Пуща, Мёртвый город, Аэродром, Кратер — и новые дали: <b>Пепельные поля</b>,
-      <b>Завод «Прометей»</b>, <b>Северный мост</b>, <b>Дальние хутора</b>, <b>Маяк</b>, <b>Мёртвый лес</b>.
-      Твари стали хитрее (бьют — и отпрыгивают), но и ты теперь быстрее их на отходе.
-      Напарника можно провести <b>по сети</b>.
+      Зона — <b>16 × 16 км</b>, мир грузится секторами вокруг тебя. У Сидоровича в бункере
+      тепло: полки с тушёнкой, кровать, буржуйка, радио, деревянный стол — и сам хозяин.
+      Твари бьют — и лишь слегка отпрыгивают. В HUD видно, сколько осталось до Выброса.
     </div>
     <div class="keys" id="keysDesk">
       <span><em>W A S D</em> движение</span><span><em>Shift</em> бег</span>
       <span><em>ЛКМ</em> огонь</span><span><em>R</em> перезарядка</span>
-      <span><em>1 2 3 4</em> оружие / нож</span><span><em>E</em> действие / торговля</span>
+      <span><em>1 2 3 4 / колесо</em> оружие / нож</span><span><em>E</em> действие / торговля</span>
       <span><em>H</em> аптечка</span><span><em>Esc</em> закрыть</span>
     </div>
     <div class="keys hidden" id="keysTouch">
@@ -141,8 +146,7 @@
       <button class="go" id="btnHost">Я ХОСТ — СОЗДАТЬ ИГРУ</button>
       <button class="go alt" id="btnJoin">ПОДКЛЮЧИТЬСЯ К ХОСТУ</button>
       <div class="mpnote" style="margin-top:12px">Соединение напрямую между браузерами (WebRTC). Коды передайте друг другу
-      мессенджером. Мир генерируется у обоих одинаково по общему сиду — передаётся только он.
-      Можно тестировать в двух вкладках одного браузера.</div>
+      мессенджером. Мир генерируется у обоих одинаково по общему сиду. Можно тестировать в двух вкладках.</div>
     </div>
     <div id="mpHostUI" class="hidden">
       <div class="mpstep">
@@ -209,7 +213,6 @@ const dist=(x1,y1,x2,y2)=>Math.hypot(x2-x1,y2-y1);
 const lerp=(a,b,t)=>a+(b-a)*t;
 const angTo=(x1,y1,x2,y2)=>Math.atan2(y2-y1,x2-x1);
 const pick=a=>a[Math.floor(Math.random()*a.length)];
-/* детерминированный ГПСЧ (mulberry32) — одинаковый мир у хоста и клиента */
 function mulberry32(s){ return function(){ s|=0; s=s+0x6D2B79F5|0;
   let t=Math.imul(s^s>>>15,1|s); t=t+Math.imul(t^t>>>7,61|t)^t;
   return ((t^t>>>14)>>>0)/4294967296; }; }
@@ -228,7 +231,7 @@ function checkOrient(){
 }
 function resize(){
   W=innerWidth; H=innerHeight;
-  DPR=Math.min(devicePixelRatio||1,3);   /* полный Retina — чанки экономят память */
+  DPR=Math.min(devicePixelRatio||1,3);
   cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
   cv.style.width=W+'px'; cv.style.height=H+'px';
   darkC=document.createElement('canvas'); darkC.width=W; darkC.height=H; darkCtx=darkC.getContext('2d');
@@ -297,11 +300,12 @@ const AU={
     setTimeout(()=>{try{s.stop()}catch(e){}},2500); this.rg=null; }
 };
 
-/* ================= МИР: ЧАНКОВАЯ СИСТЕМА ================= */
+/* ================= МИР: ЧАНКИ ================= */
 const MAP=16000, CHUNK=2000, CN=MAP/CHUNK, CSIZE=420, CSC=CSIZE/CHUNK;
 let WORLD_SEED=1337;
-const wallRects=[], solidCircles=[], props=[], anomalies=[], artifacts=[], drops=[], mutants=[], bandits=[], npcs=[], corpses=[], parts=[], bullets=[], fires=[], shelters=[], muzzle=[], placedPts=[];
+const wallRects=[], floorRects=[], solidCircles=[], props=[], anomalies=[], artifacts=[], drops=[], mutants=[], bandits=[], npcs=[], corpses=[], parts=[], bullets=[], fires=[], shelters=[], muzzle=[], placedPts=[];
 const artifactsTaken=new Set();
+let MID=0, ARTID=0;
 const LAKE={x:3650,y:2150,r:390};
 const TRADER={x:2050,y:4110};
 const radZones=[{x:2600,y:1200,r:280},{x:800,y:900,r:220},{x:3550,y:750,r:260},{x:1200,y:2700,r:190},
@@ -330,9 +334,9 @@ const WEAPONS=[
   {name:'Нож',melee:true,dmg:30,rate:.45,len:5}
 ];
 const AMMO_N={a9:'Патроны 9×18',a12:'Дробь 12×70',a545:'Патроны 5.45'};
-/* сниженные скорости */
 const SPD={walk:95,run:180,dog:120,zombie:34,bs:62,boar:92,giant:30,
   boarCharge:210,bsLunge:230,bandA:70,bandB:60,bandW:35,mercA:160,mercB:115};
+const RETREAT={dog:[.7,1.1],zombie:[.7,.7],bs:[1.2,1.15],boar:[1.4,1.3],giant:[1.0,1.25]};
 
 const player={id:0,name:'Штырь',x:2050,y:4470,r:11,angle:0,hp:100,maxHp:100,stam:100,rad:0,money:1500,
   wi:0,mags:[8,2,0,0],reserve:{a9:48,a12:10,a545:0},meds:1,hasAk:false,hasSuit:false,
@@ -349,7 +353,7 @@ function addRep(n){
   if(rep>=60&&old<60) toast('Репутация: у Сидоровича для тебя скидка 15%','gr');
 }
 
-/* --- спрайты пропсов (кэш по типу) --- */
+/* --- спрайты --- */
 function makeSprite(s,fn){ const c=document.createElement('canvas'); c.width=c.height=s; const x=c.getContext('2d'); x.translate(s/2,s/2); fn(x); return c; }
 const sprCache={};
 function propSprite(type){
@@ -407,44 +411,73 @@ function propSprite(type){
       x.fillStyle='#453f36'; x.fillRect(-40,-10,80,6);
       x.strokeStyle='#332e26'; x.lineWidth=2;
       for(let i=-30;i<40;i+=14){ x.beginPath(); x.moveTo(i,-10); x.lineTo(i,10); x.stroke(); } }
+    if(type==='shelf'){ x.fillStyle='#4a3c28'; x.fillRect(-46,-6,92,10);
+      x.strokeStyle='#2e2416'; x.lineWidth=2; x.strokeRect(-46,-6,92,10);
+      x.fillStyle='#3a3020'; x.fillRect(-46,4,92,3);
+      const cans=['#7a7a6a','#6a6a58','#8a8272','#5a5a4a'];
+      for(let i=0;i<6;i++){ x.fillStyle=cans[i%4];
+        x.fillRect(-40+i*14,-14,9,8);
+        x.fillStyle='rgba(255,255,255,.12)'; x.fillRect(-40+i*14,-14,9,2); }
+      x.fillStyle='#4a5a3a'; x.fillRect(30,-18,6,12);
+      x.fillStyle='#3a4a2c'; x.fillRect(39,-16,6,10); }
+    if(type==='bed'){ x.fillStyle='#4a3c28'; x.fillRect(-30,-18,60,36);
+      x.fillStyle='#6a6a58'; x.fillRect(-28,-16,26,32);
+      x.fillStyle='#5a4a3a'; x.fillRect(0,-16,28,32);
+      x.strokeStyle='#2e2416'; x.lineWidth=2; x.strokeRect(-30,-18,60,36);
+      x.fillStyle='#5a5a48'; x.fillRect(-26,-14,18,10); }
+    if(type==='sack'){ x.fillStyle='#6a5f45'; x.beginPath(); x.ellipse(0,2,11,8,0,0,TAU); x.fill();
+      x.fillStyle='#7a7055'; x.beginPath(); x.ellipse(-2,-4,7,6,0,0,TAU); x.fill();
+      x.strokeStyle='#4a4030'; x.lineWidth=1.5;
+      x.beginPath(); x.moveTo(-4,-9); x.lineTo(-2,-2); x.moveTo(3,-9); x.lineTo(1,-2); x.stroke(); }
+    if(type==='radio'){ x.fillStyle='#3c3830'; x.fillRect(-8,-6,16,12);
+      x.fillStyle='#2a2620'; x.fillRect(-6,-4,12,5);
+      x.fillStyle='#c9b060'; x.fillRect(4,-4,2,2);
+      x.strokeStyle='#1d1a16'; x.lineWidth=1; x.strokeRect(-8,-6,16,12);
+      x.strokeStyle='#5a5245'; x.beginPath(); x.moveTo(-7,-6); x.lineTo(-11,-15); x.stroke(); }
+    if(type==='rug'){ x.fillStyle='#5a3a30'; x.beginPath(); x.ellipse(0,0,30,20,0,0,TAU); x.fill();
+      x.strokeStyle='#6a4a3c'; x.lineWidth=3;
+      x.beginPath(); x.ellipse(0,0,22,13,0,0,TAU); x.stroke();
+      x.beginPath(); x.ellipse(0,0,13,7,0,0,TAU); x.stroke(); }
+    if(type==='stove'){ x.fillStyle='#3c3830'; x.fillRect(-14,-14,28,28);
+      x.fillStyle='#2a2620'; x.fillRect(-9,-9,18,18);
+      x.fillStyle='#1d1a16'; x.fillRect(-6,-4,12,8);
+      x.fillStyle='#4a443a'; x.fillRect(-14,-18,28,5);
+      x.strokeStyle='#26231e'; x.lineWidth=2; x.strokeRect(-14,-14,28,28);
+      x.fillStyle='#4a443a'; x.fillRect(-3,-30,6,13); }
   });
 }
 
-/* --- земля: глобальные объекты рисуются в мировых координатах (клипаются чанком) --- */
+/* --- глобальные объекты земли --- */
 function drawWorldFeatures(c2){
   for(const r of ROADS){ c2.fillStyle='#4a4437'; c2.fillRect(r.x,r.y,r.w,r.h); }
-  c2.fillStyle='rgba(22,34,28,.35)'; c2.fillRect(0,0,1900,900);           /* болото СЗ */
-  c2.fillStyle='rgba(26,36,26,.4)'; c2.fillRect(4900,4400,11100,11600);   /* пуща/юг-восток */
-  c2.fillStyle='rgba(52,52,48,.55)'; c2.fillRect(6350,650,1300,1100);     /* мостовая города */
-  c2.fillStyle='rgba(56,56,52,.65)'; c2.fillRect(8560,1900,300,1900);     /* полоса аэродрома */
-  c2.fillStyle='rgba(90,86,76,.4)';                                       /* пепел полей */
-  for(let i=0;i<14;i++)c2.fillRect(300+i*160,6000,90,90);
-  const cg=c2.createRadialGradient(8700,6500,60,8700,6500,420);           /* кратер */
+  c2.fillStyle='rgba(22,34,28,.35)'; c2.fillRect(0,0,1900,900);
+  c2.fillStyle='rgba(26,36,26,.4)'; c2.fillRect(4900,4400,11100,11600);
+  c2.fillStyle='rgba(52,52,48,.55)'; c2.fillRect(6350,650,1300,1100);
+  c2.fillStyle='rgba(56,56,52,.65)'; c2.fillRect(8560,1900,300,1900);
+  const cg=c2.createRadialGradient(8700,6500,60,8700,6500,420);
   cg.addColorStop(0,'#2e2a22'); cg.addColorStop(.7,'#333026'); cg.addColorStop(1,'rgba(51,48,38,0)');
   c2.fillStyle=cg; c2.beginPath(); c2.arc(8700,6500,420,0,TAU); c2.fill();
-  const lg=c2.createRadialGradient(LAKE.x,LAKE.y,40,LAKE.x,LAKE.y,LAKE.r); /* озеро */
+  const lg=c2.createRadialGradient(LAKE.x,LAKE.y,40,LAKE.x,LAKE.y,LAKE.r);
   lg.addColorStop(0,'#22352e'); lg.addColorStop(.8,'#1b2b26'); lg.addColorStop(1,'rgba(27,43,38,0)');
   c2.fillStyle=lg; c2.beginPath(); c2.arc(LAKE.x,LAKE.y,LAKE.r,0,TAU); c2.fill();
   c2.strokeStyle='rgba(70,90,60,.5)'; c2.lineWidth=2;
   for(let i=0;i<90;i++){ const a=i/90*TAU,d=LAKE.r+rnd(-30,10);
     const px=LAKE.x+Math.cos(a)*d, py=LAKE.y+Math.sin(a)*d;
     c2.beginPath(); c2.moveTo(px,py); c2.lineTo(px,py-14); c2.stroke(); }
-  c2.strokeStyle='#4a4437'; c2.lineWidth=14;                              /* причалы */
+  c2.strokeStyle='#4a4437'; c2.lineWidth=14;
   c2.beginPath(); c2.moveTo(5320,1980); c2.lineTo(5320,2140); c2.moveTo(5560,1980); c2.lineTo(5560,2160); c2.stroke();
   for(const z of radZones){ const gr=c2.createRadialGradient(z.x,z.y,10,z.x,z.y,z.r);
     gr.addColorStop(0,'rgba(160,140,40,.28)'); gr.addColorStop(1,'rgba(160,140,40,0)');
     c2.fillStyle=gr; c2.beginPath(); c2.arc(z.x,z.y,z.r,0,TAU); c2.fill(); }
-  /* тёмная кромка мира */
   c2.fillStyle='rgba(6,8,5,.85)';
   c2.fillRect(0,0,MAP,180); c2.fillRect(0,MAP-180,MAP,180);
   c2.fillRect(0,0,180,MAP); c2.fillRect(MAP-180,0,180,MAP);
 }
 
-/* --- чанки --- */
-const chunkCache=new Map();     /* ключ → {canvas} */
-const chunkProps=new Map();     /* ключ → [prop,...] */
-const builtLandmarks=new Set();
-const spawnedChunks=new Set();
+/* --- канвасы чанков --- */
+const chunkCache=new Map();
+const chunkProps=new Map();
+const genOnce=new Set();
 function chunkKey(cx,cy){ return cx+','+cy; }
 function buildChunkCanvas(cx,cy){
   const cnv=document.createElement('canvas'); cnv.width=cnv.height=CSIZE;
@@ -468,20 +501,39 @@ function getChunkCanvas(cx,cy){
   let e=chunkCache.get(k2);
   if(e){ chunkCache.delete(k2); chunkCache.set(k2,e); return e.canvas; }
   const canvas=buildChunkCanvas(cx,cy);
-  e={canvas}; chunkCache.set(k2,e);
-  if(chunkCache.size>26){ const oldest=chunkCache.keys().next().value;
+  chunkCache.set(k2,{canvas});
+  if(chunkCache.size>40){ const oldest=chunkCache.keys().next().value;
     if(oldest!==k2) chunkCache.delete(oldest); }
   return canvas;
 }
 function bakeBlood(x,y){
   const cx=Math.floor(x/CHUNK), cy=Math.floor(y/CHUNK);
-  const k2=chunkKey(cx,cy); const e=chunkCache.get(k2); if(!e)return;
+  const e=chunkCache.get(chunkKey(cx,cy)); if(!e)return;
   const c2=e.canvas.getContext('2d');
   c2.setTransform(CSC,0,0,CSC,-cx*CHUNK*CSC,-cy*CHUNK*CSC);
   c2.fillStyle='rgba(70,14,10,.55)';
   c2.beginPath(); c2.ellipse(x,y,rnd(1.5,4),rnd(1,3),rnd(0,TAU),0,TAU); c2.fill();
 }
-/* размещение пропсов внутри чанка */
+
+/* --- аномалии/артефакты --- */
+function anomaly(type,x,y,aid){
+  const an={type,x,y,r:type==='kar'?90:60,cd:0,t:rnd(0,100),bolts:[],nodes:[]};
+  if(type==='electra') for(let i=0;i<rndi(3,5);i++) an.nodes.push({x:x+rnd(-45,45),y:y+rnd(-45,45)});
+  anomalies.push(an);
+  if(NET.role!=='client'&&Math.random()<.62) spawnArt(an,aid);
+}
+function spawnArt(an,forcedId){
+  const tbl={electra:[['meduza',.75],['vspyshka',1]],zharka:[['kolychka',.7],['dusha',1]],
+    tramp:[['flower',.7],['vspyshka',1]],kar:[['dusha',.6],['busy',1]]};
+  let r=Math.random(),kind=tbl[an.type][0][0];
+  for(const[k2,p2]of tbl[an.type]){ if(r<=p2){kind=k2;break;} r=1; }
+  const a=rnd(0,TAU),d=an.type==='kar'?rnd(0,20):rnd(26,64);
+  const id=forcedId!==undefined?forcedId:++ARTID;
+  if(artifactsTaken.has(id))return;
+  artifacts.push({id,kind,x:an.x+Math.cos(a)*d,y:an.y+Math.sin(a)*d,taken:false,ph:rnd(0,TAU)});
+}
+
+/* --- размещение --- */
 function rectDist(px,py,r){ const dx=Math.max(r.x-px,0,px-(r.x+r.w)), dy=Math.max(r.y-py,0,py-(r.y+r.h));
   return Math.hypot(dx,dy); }
 function canPlace(x,y,r){
@@ -495,12 +547,13 @@ function canPlace(x,y,r){
   if(dist(x,y,TRADER.x,TRADER.y-60)<300) return false;
   return true;
 }
+/* nosee:true — коллизия есть, но прямоугольник НЕ рисуется как стена */
 function chunkPlace(list,cx,cy,type,x,y,a,r,hw,hh){
   if(!canPlace(x,y,r))return false;
-  if(hw){ wallRects.push({x:x-hw,y:y-hh,w:hw*2,h:hh*2}); }
+  if(hw){ wallRects.push({x:x-hw,y:y-hh,w:hw*2,h:hh*2,nosee:true}); }
   else if(r>0) solidCircles.push({x,y,r});
   placedPts.push({x,y,r});
-  const p={type,x,y,a,spr:propSprite(type),ck:chunkKey(cx,cy)};
+  const p={type,x,y,a,hw:hw||0,hh:hh||0,spr:propSprite(type)};
   props.push(p); list.push(p);
   return true;
 }
@@ -511,14 +564,12 @@ function buildChunkContent(cx,cy){
   const rng=mulberry32(hashChunk(cx,cy,WORLD_SEED)^0x9e3779b9);
   const x0=cx*CHUNK, y0=cy*CHUNK;
   const px=()=>x0+60+rng()*(CHUNK-120), py=()=>y0+60+rng()*(CHUNK-120);
-  /* растительность: гуще в диком лесу */
   const wild=(x0>4400&&y0>4400)||(x0>6200&&y0<2000)||(x0>10400&&y0>10400)||(x0<3000&&y0>5600);
   const treeN=wild?34:20;
   for(let i=0;i<treeN;i++)
     chunkPlace(list,cx,cy,(rng()<.55||wild)?'pine':'tree',px(),py(),rng()*TAU,12);
   for(let i=0;i<10;i++) chunkPlace(list,cx,cy,'bush',px(),py(),0,13);
   for(let i=0;i<4;i++) chunkPlace(list,cx,cy,'rock',px(),py(),0,16);
-  /* хлам: на западе (свалка) и у дорог */
   const junk=(x0<2600&&y0>1200&&y0<3400)||(rng()<.22);
   if(junk){
     for(let i=0;i<3;i++){ const a=rng()<.5?0:Math.PI/2;
@@ -527,12 +578,14 @@ function buildChunkContent(cx,cy){
     for(let i=0;i<4;i++) chunkPlace(list,cx,cy,'barrel',px(),py(),0,15);
     for(let i=0;i<2;i++) chunkPlace(list,cx,cy,'crate',px(),py(),0,21);
   }
-  /* аномалии: детерминированно по сиду */
-  const anN=(rng()<.38?1:0)+(rng()<.16?1:0);
-  for(let i=0;i<anN;i++){
-    const roll=rng();
-    const type=roll<.3?'electra':roll<.58?'zharka':roll<.85?'tramp':'kar';
-    anomaly(type,px(),py(),k2,(cx*CN+cy)*100+i);
+  if(!genOnce.has(k2)){
+    genOnce.add(k2);
+    const anN=(rng()<.38?1:0)+(rng()<.16?1:0);
+    for(let i=0;i<anN;i++){
+      const roll=rng();
+      const type=roll<.3?'electra':roll<.58?'zharka':roll<.85?'tramp':'kar';
+      anomaly(type,px(),py(),(cx*CN+cy)*100+i);
+    }
   }
   chunkProps.set(k2,list);
 }
@@ -541,11 +594,10 @@ function unloadChunk(cx,cy){
   const list=chunkProps.get(k2); if(!list)return;
   for(const p of list){
     const i=props.indexOf(p); if(i>=0)props.splice(i,1);
-    if(p.ck===undefined)continue;
-    const si=solidCircles.findIndex(c=>c.x===p.x&&c.y===p.y);
-    if(si>=0)solidCircles.splice(si,1);
-    const ri=wallRects.findIndex(w=>w.x===p.x-p.hw&&w.y===p.y-p.hh);
-    if(ri>=0)wallRects.splice(ri,1);
+    if(p.hw){ const ri=wallRects.indexOf(wallRects.find(w=>w.nosee&&w.x===p.x-p.hw&&w.y===p.y-p.hh&&w.w===p.hw*2));
+      if(ri>=0)wallRects.splice(ri,1); }
+    else if(p.spr&&p.type!=='bush'){ const si=solidCircles.findIndex(c=>c.x===p.x&&c.y===p.y);
+      if(si>=0)solidCircles.splice(si,1); }
     const pi=placedPts.findIndex(q=>q.x===p.x&&q.y===p.y);
     if(pi>=0)placedPts.splice(pi,1);
   }
@@ -555,47 +607,20 @@ let chunkTimer=0;
 function ensureChunks(dt){
   chunkTimer-=dt; if(chunkTimer>0)return; chunkTimer=.5;
   const pcx=Math.floor(player.x/CHUNK), pcy=Math.floor(player.y/CHUNK);
-  const R=2;
-  for(let dx=-R;dx<=R;dx++)for(let dy=-R;dy<=R;dy++){
+  for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
     const cx=pcx+dx, cy=pcy+dy;
     if(cx<0||cy<0||cx>=CN||cy>=CN)continue;
     getChunkCanvas(cx,cy); buildChunkContent(cx,cy);
   }
   for(const k2 of [...chunkProps.keys()]){
     const [cx,cy]=k2.split(',').map(Number);
-    if(Math.abs(cx-pcx)>R+1||Math.abs(cy-pcy)>R+1) unloadChunk(cx,cy);
+    if(Math.abs(cx-pcx)>3||Math.abs(cy-pcy)>3) unloadChunk(cx,cy);
   }
 }
 
-/* --- аномалии и артефакты --- */
-function anomaly(type,x,y,tag,aid){
-  const an={type,x,y,r:type==='kar'?90:60,cd:0,t:rnd(0,100),bolts:[],nodes:[],tag:tag||null};
-  if(type==='electra') for(let i=0;i<rndi(3,5);i++) an.nodes.push({x:x+rnd(-45,45),y:y+rnd(-45,45)});
-  anomalies.push(an);
-  if(NET.role!=='client'&&Math.random()<.62) spawnArt(an,aid);
-}
-function spawnArt(an,forcedId){
-  const tbl={electra:[['meduza',.75],['vspyshka',1]],zharka:[['kolychka',.7],['dusha',1]],
-    tramp:[['flower',.7],['vspyshka',1]],kar:[['dusha',.6],['busy',1]]};
-  let r=Math.random(),kind=tbl[an.type][0][0];
-  for(const[k2,p2]of tbl[an.type]){ if(r<=p2){kind=k2;break;} r=1; }
-  const a=rnd(0,TAU),d=an.type==='kar'?rnd(0,20):rnd(26,64);
-  const id=forcedId!==undefined?forcedId:(an.tag?parseInt(an.tag)*1000+artifacts.length:100000+artifacts.length);
-  if(artifactsTaken.has(id))return;
-  artifacts.push({id,kind,x:an.x+Math.cos(a)*d,y:an.y+Math.sin(a)*d,taken:false,ph:rnd(0,TAU)});
-}
-
-/* --- достопримечательности (строятся один раз при входе в чанк) --- */
+/* --- здания --- */
 function building(x,y,w,h,doors,broken){
-  const c2=getChunkCanvas(Math.floor((x+w/2)/CHUNK),Math.floor((y+h/2)/CHUNK)).getContext('2d');
-  c2.save(); c2.setTransform(CSC,0,0,CSC,0,0);
-  c2.fillStyle='#474a41'; c2.fillRect(x,y,w,h);
-  for(let i=0;i<w*h/600;i++){ c2.fillStyle=Math.random()<.5?'rgba(20,22,18,.4)':'rgba(90,94,84,.35)';
-    c2.fillRect(x+rnd(0,w),y+rnd(0,h),rnd(2,9),rnd(2,9)); }
-  c2.strokeStyle='rgba(20,22,18,.5)'; c2.lineWidth=1.5;
-  for(let i=0;i<4;i++){ c2.beginPath(); let px2=x+rnd(6,w-6),py2=y+rnd(6,h-6); c2.moveTo(px2,py2);
-    for(let j=0;j<3;j++){ px2+=rnd(-24,24); py2+=rnd(-24,24); c2.lineTo(px2,py2); } c2.stroke(); }
-  c2.restore();
+  floorRects.push({x,y,w,h});
   const T=14;
   const seg=(side)=>{
     const horiz=(side==='n'||side==='s'); const len=horiz?w:h;
@@ -616,24 +641,45 @@ function building(x,y,w,h,doors,broken){
   seg('n');seg('s');seg('w');seg('e');
 }
 function prop(type,x,y,a,r,hw,hh){
-  if(hw){ wallRects.push({x:x-hw,y:y-hh,w:hw*2,h:hh*2}); }
-  else if(r>0) solidCircles.push({x,y,r});
-  placedPts.push({x,y,r});
-  props.push({type,x,y,a,spr:propSprite(type),perm:true});
+  const under=(type==='rug');
+  if(!under){
+    /* коллизии пропсов невидимы — рисуется спрайт, а не серый прямоугольник */
+    if(hw){ wallRects.push({x:x-hw,y:y-hh,w:hw*2,h:hh*2,nosee:true}); }
+    else if(r>0) solidCircles.push({x,y,r});
+  }
+  if(!under) placedPts.push({x,y,r});
+  props.push({type,x,y,a,spr:propSprite(type),perm:true,under});
 }
+
+/* --- достопримечательности --- */
 const LANDMARKS=[
- {cx:1,cy:2,fn(){ /* бункер Сидоровича */
+ {k:'bunker',cx:1,cy:2,fn(){
    building(1880,4050,340,260,{s:[80]},false);
    shelters.push({x:1880,y:4050,w:340,h:260,n:'Бункер Сидоровича'});
-   prop('desk',2050,4170,0,60);
+   prop('desk',2050,4170,0,0,60,16);
+   solidCircles.push({x:TRADER.x,y:TRADER.y,r:13});
+   placedPts.push({x:TRADER.x,y:TRADER.y,r:13});
+   prop('rug',2050,4245,0,0);
+   prop('shelf',1965,4082,0,46,44,10);
+   prop('shelf',2135,4082,0,46,44,10);
+   prop('bed',2172,4242,0,30,30,18);
+   prop('stove',1908,4252,0,14,14,14);
+   prop('sack',1935,4108,0,0);
+   prop('sack',1952,4098,.4,0);
+   prop('sack',2228,4092,.2,0);
+   prop('crate',2118,4262,0,20);
+   prop('crate',2095,4272,.3,20);
+   prop('radio',2086,4160,0,0);
+   prop('crate',1900,4390,0,20); prop('crate',2210,4400,0,20);
    fires.push({x:1800,y:4330});
-   prop('crate',1930,4390,0,20); prop('crate',2210,4400,0,20);
    npcs.push({id:++MID,x:1795,y:4355,angle:-2,walk:0,hostile:false,hp:70,shootT:0,say:0});
    npcs.push({id:++MID,x:1822,y:4332,angle:-1.5,walk:0,hostile:false,hp:70,shootT:0,say:0});
    npcs.push({id:++MID,x:1768,y:4330,angle:-2.4,walk:0,hostile:false,hp:70,shootT:0,say:0}); }},
- {cx:0,cy:0,fn(){ building(700,1820,150,150,{s:[40]},false);
+ {k:'dump',cx:0,cy:0,fn(){
+   building(700,1820,150,150,{s:[40]},false);
    shelters.push({x:700,y:1820,w:150,h:150,n:'Подвал на свалке'}); fires.push({x:950,y:1750}); }},
- {cx:1,cy:1,fn(){ building(2050,2050,260,200,{s:[100]},true);
+ {k:'ruins',cx:1,cy:1,fn(){
+   building(2050,2050,260,200,{s:[100]},true);
    building(2400,2100,220,180,{n:[80],w:[70]},true);
    building(1950,2400,200,160,{n:[60]},true);
    building(2380,2460,280,190,{n:[120],s:[150]},true);
@@ -641,99 +687,104 @@ const LANDMARKS=[
    building(2150,2660,220,170,{n:[90],e:[60]},true);
    prop('car',2300,2450,.4,50,44,21); prop('car',2150,2620,1.8,50,44,21);
    prop('car',2600,1900,.9,50,44,21); fires.push({x:2200,y:2500});
-   anomaly('kar',2350,2350,null,1101); }},
- {cx:0,cy:0,fn(){ /* агропром */
+   anomaly('kar',2350,2350,1101); }},
+ {k:'agro',cx:0,cy:1,fn(){
    building(1800,500,380,240,{s:[150]},false); shelters.push({x:1800,y:500,w:380,h:240,n:'Бункер агропрома'});
    building(2300,620,280,200,{s:[100]},true); building(1650,900,200,160,{e:[60]},true);
    prop('pipe',2050,400,0,0,60,12); }},
- {cx:2,cy:0,fn(){ building(3800,600,300,220,{s:[120]},true);
+ {k:'radar',cx:2,cy:0,fn(){
+   building(3800,600,300,220,{s:[120]},true);
    building(4150,900,160,160,{s:[40]},false); shelters.push({x:4150,y:900,w:160,h:160,n:'Бункер радара'});
    prop('radartower',4000,480,0,18); }},
- {cx:1,cy:1,fn(){ building(3300,2700,150,150,{w:[40]},false);
-   shelters.push({x:3300,y:2700,w:150,h:150,n:'Подвал у озера'});
-   anomaly('kar',3650,2150,null,1201); }},
- {cx:1,cy:1,fn(){ /* тёмная долина */
+ {k:'lakeshed',cx:1,cy:1,fn(){
+   building(3300,2700,150,150,{w:[40]},false);
+   shelters.push({x:3300,y:2700,w:150,h:150,n:'Подвал у озера'}); }},
+ {k:'valley',cx:1,cy:1,fn(){
    building(3300,3500,280,200,{n:[100]},false);
    building(3650,3450,240,180,{n:[70]},true);
    building(3250,3780,220,180,{s:[60]},false); shelters.push({x:3250,y:3780,w:220,h:180,n:'Подвал в долине'});
    for(let i=0;i<5;i++)prop('fence',3140,3440+i*64,Math.PI/2,30,8,30);
    for(let i=0;i<5;i++)prop('fence',3940,3440+i*64,Math.PI/2,30,8,30);
    prop('car',3300,3320,1.5,50,44,21); fires.push({x:3550,y:3750}); }},
- {cx:2,cy:0,fn(){ /* затон */
+ {k:'zaton',cx:2,cy:0,fn(){
    building(5200,1300,240,180,{s:[80]},true); building(5500,1500,260,190,{n:[90]},true);
    building(5150,1850,150,150,{e:[40]},false); shelters.push({x:5150,y:1850,w:150,h:150,n:'Причал в Затоне'});
    prop('boat',5320,2180,0,16); prop('boat',5560,2200,.2,16); prop('boat',5440,2230,-.15,16);
    prop('car',5250,1620,.7,50,44,21); }},
- {cx:2,cy:1,fn(){ building(5250,3400,200,160,{s:[70]},true);
+ {k:'farm',cx:2,cy:1,fn(){
+   building(5250,3400,200,160,{s:[70]},true);
    building(5500,3550,160,140,{n:[50]},true); }},
- {cx:2,cy:2,fn(){ building(5900,5550,150,150,{w:[40]},false);
+ {k:'pusha',cx:2,cy:2,fn(){
+   building(5900,5550,150,150,{w:[40]},false);
    shelters.push({x:5900,y:5550,w:150,h:150,n:'Хата в пуще'});
    building(5300,5900,200,160,{n:[60]},true); fires.push({x:5950,y:5700}); }},
- {cx:3,cy:0,fn(){ /* мёртвый город */
+ {k:'city',cx:3,cy:0,fn(){
    building(6500,800,220,180,{s:[80]},true); building(6800,760,200,170,{n:[70]},true);
    building(7100,900,240,180,{w:[80]},true); building(6550,1250,200,160,{n:[60]},true);
    building(6950,1350,220,170,{s:[70]},true); building(7350,1100,180,200,{w:[60]},true);
    prop('ruin',6700,1000,0,0); prop('ruin',7150,1150,.3,0); prop('ruin',6900,1550,-.2,0);
    prop('car',6600,1900,.2,50,44,21); }},
- {cx:3,cy:1,fn(){ /* барьер */
+ {k:'barrier',cx:3,cy:1,fn(){
    building(6880,3150,160,160,{s:[40]},false); shelters.push({x:6880,y:3150,w:160,h:160,n:'Блокпост «Барьер»'});
    for(let i=0;i<6;i++)prop('fence',7050,3080+i*50,Math.PI/2,30,8,30);
    prop('car',6800,3350,.5,50,44,21); fires.push({x:6950,y:3280}); }},
- {cx:3,cy:2,fn(){ /* старая станция */
+ {k:'station',cx:3,cy:2,fn(){
    building(6650,5350,320,200,{s:[120]},true);
    building(7050,5450,180,160,{w:[40]},false); shelters.push({x:7050,y:5450,w:180,h:160,n:'Сторожка станции'});
    prop('radartower',6560,5620,0,18); }},
- {cx:4,cy:1,fn(){ /* аэродром */
+ {k:'airfield',cx:4,cy:1,fn(){
    building(8450,2450,300,220,{e:[90]},false); shelters.push({x:8450,y:2450,w:300,h:220,n:'Ангар аэродрома'});
    building(8950,3300,220,180,{n:[70]},true);
    prop('radartower',9150,2250,0,18);
    prop('plane',8700,2950,0,50); prop('plane',8620,3500,.12,50);
    prop('car',8900,2450,1.1,50,44,21); fires.push({x:8600,y:2680}); }},
- {cx:4,cy:3,fn(){ /* кратер */
+ {k:'crater',cx:4,cy:3,fn(){
    for(let i=0;i<7;i++){ const a=rnd(0,TAU),d=rnd(140,340);
      prop('barrel',8700+Math.cos(a)*d,6500+Math.sin(a)*d,0,15); }
    prop('ruin',8560,6720,.4,0);
-   anomaly('kar',8700,6500,null,4311); anomaly('kar',8900,6650,null,4312); }},
- {cx:0,cy:3,fn(){ /* пепельные поля */
+   anomaly('kar',8700,6500,4311); anomaly('kar',8900,6650,4312); }},
+ {k:'ashfields',cx:0,cy:3,fn(){
    building(1300,6350,200,160,{s:[60]},false); shelters.push({x:1300,y:6350,w:200,h:160,n:'Хутор на полях'});
    prop('pipe',1550,6600,.4,0,55,12); }},
- {cx:1,cy:4,fn(){ /* завод «Прометей» */
+ {k:'prometheus',cx:1,cy:4,fn(){
    building(3600,8800,400,280,{s:[160]},true);
    building(4100,9050,240,200,{w:[70]},true);
    shelters.push({x:4100,y:9050,w:240,h:200,n:'Цех завода'});
    prop('pipe',3800,9250,0,0,80,14); prop('pipe',4050,9250,0,0,80,14);
    prop('radartower',3550,8700,0,18); fires.push({x:4250,y:8900}); }},
- {cx:4,cy:0,fn(){ /* северный мост */
+ {k:'bridge',cx:4,cy:0,fn(){
    building(7900,600,220,160,{s:[50]},false); shelters.push({x:7900,y:600,w:220,h:160,n:'Пост у моста'});
    prop('ruin',8250,700,.3,0); prop('car',8050,760,1.2,50,44,21); }},
- {cx:6,cy:1,fn(){ /* дальние хутора */
+ {k:'farmsteads',cx:6,cy:1,fn(){
    building(12400,2350,180,150,{s:[50]},true);
    building(12700,2550,160,140,{n:[40]},false); shelters.push({x:12700,y:2550,w:160,h:140,n:'Хата на хуторах'}); }},
- {cx:7,cy:4,fn(){ /* маяк */
+ {k:'lighthouse',cx:7,cy:4,fn(){
    building(14350,8950,150,150,{w:[40]},false); shelters.push({x:14350,y:8950,w:150,h:150,n:'Караулка маяка'});
    prop('radartower',14550,9100,0,18); fires.push({x:14450,y:9150}); }},
- {cx:5,cy:6,fn(){ /* старый карьер */
+ {k:'quarry',cx:5,cy:6,fn(){
    for(let i=0;i<6;i++){ const a=rnd(0,TAU),d=rnd(60,200);
      prop('rock',6000+Math.cos(a)*d,13000+Math.sin(a)*d,0,16); }
    prop('car',5900,13150,.8,50,44,21); }},
- {cx:6,cy:6,fn(){ /* мёртвый лес — хата отшельника */
+ {k:'deadforest',cx:5,cy:6,fn(){
    building(11550,12450,150,150,{e:[40]},false); shelters.push({x:11550,y:12450,w:150,h:150,n:'Хата отшельника'});
    fires.push({x:11700,y:12650});
-   anomaly('kar',11900,12700,null,6661); }},
+   anomaly('kar',11900,12700,6661); }},
 ];
 function ensureLandmarks(){
   const pcx=Math.floor(player.x/CHUNK), pcy=Math.floor(player.y/CHUNK);
   for(const l of LANDMARKS){
-    const k2=l.cx+'_'+l.cy;
-    if(builtLandmarks.has(k2))continue;
-    if(Math.abs(l.cx-pcx)<=2&&Math.abs(l.cy-pcy)<=2){ builtLandmarks.add(k2); l.fn(); }
+    if(builtLandmarks.has(l.k))continue;
+    if(Math.abs(l.cx-pcx)<=2&&Math.abs(l.cy-pcy)<=2){ builtLandmarks.add(l.k); l.fn(); }
   }
 }
-/* --- население чанков (хост) --- */
+const builtLandmarks=new Set();
+
+/* --- население чанков --- */
 function populateChunk(cx,cy){
-  const k2=cx+'_'+cy; if(spawnedChunks.has(k2))return;
-  spawnedChunks.add(k2);
-  if(cx===1&&cy===2)return; /* стартовый блокпост спокойный */
+  const k2=cx+'_'+cy;
+  if(populatedChunks.has(k2))return;
+  populatedChunks.add(k2);
+  if(cx===1&&cy===2)return;
   const rng=mulberry32(hashChunk(cx,cy,WORLD_SEED)^0x5bf03635);
   const x0=cx*CHUNK+300+rng()*1400, y0=cy*CHUNK+300+rng()*1400;
   if(dist(x0,y0,TRADER.x,TRADER.y)<900)return;
@@ -747,6 +798,7 @@ function populateChunk(cx,cy){
       angle:rnd(0,TAU),shootT:rnd(1,3),burst:0,wt:0,tx:x0,ty:y0,walk:0,kx:0,ky:0,aggro:false,tid:0}); }
   else if(roll<.78){ mutants.push(mkMutant('bs',x0,y0)); }
 }
+const populatedChunks=new Set();
 function mkMutant(kind,x,y){
   const c={dog:{hp:30,sp:SPD.dog,r:10,aggro:380},zombie:{hp:70,sp:SPD.zombie,r:11,aggro:300},
     bs:{hp:220,sp:SPD.bs,r:12,aggro:620},boar:{hp:60,sp:SPD.boar,r:12,aggro:430},giant:{hp:600,sp:SPD.giant,r:20,aggro:700}}[kind];
@@ -765,8 +817,9 @@ function hostMakeOffer(){
     const pc=new RTCPeerConnection(pcCfg());
     const ch=pc.createDataChannel('z');
     ch.onopen=()=>{ const id=1+NET.conns.length;
-      NET.conns.push({ch,id,name:'Сталкер-'+id,x:TRADER.x,y:TRADER.y+60,angle:0,hp:100,wi:0,dead:false,rx:0,ry:0});
-      ch.send(JSON.stringify({t:'welcome',id,seed:WORLD_SEED,taken:[...artifactsTaken]}));
+      NET.conns.push({ch,id,name:'Сталкер-'+id,x:TRADER.x,y:TRADER.y+60,angle:0,hp:100,wi:0,dead:false});
+      ch.send(JSON.stringify({t:'welcome',id,seed:WORLD_SEED,taken:[...artifactsTaken],
+        arts:artifacts.map(a=>[a.id,a.kind,Math.round(a.x),Math.round(a.y)])}));
       setMpStatus('Игрок подключен! Всего игроков: '+(NET.conns.length+1));
       toast('К Зоне присоединился напарник','gr'); };
     ch.onmessage=e=>{ try{ hostOnMsg(ch,JSON.parse(e.data)); }catch(err){} };
@@ -826,7 +879,10 @@ function hostOnMsg(ch,m){
 function clientOnMsg(m){
   if(m.t==='welcome'){ NET.myId=m.id; WORLD_SEED=m.seed;
     for(const id of m.taken) artifactsTaken.add(id);
-    toast('Мир Зоны генерируется…','gr'); return; }
+    artifacts.length=0;
+    for(const a of m.arts)
+      artifacts.push({id:a[0],kind:a[1],x:a[2],y:a[3],taken:artifactsTaken.has(a[0]),ph:rnd(0,TAU)});
+    return; }
   if(m.t==='s'){ applySnap(m); return; }
   if(m.t==='dmg'){ netDamage(m); return; }
   if(m.t==='ev'){ if(m.k==='art'){ artifactsTaken.add(m.i);
@@ -846,7 +902,7 @@ function buildSnap(){
     bl:bullets.map(b=>[Math.round(b.x),Math.round(b.y),Math.round(b.px),Math.round(b.py),b.from==='ally'?1:0]),
     mz:muzzle.map(mm=>[Math.round(mm.x),Math.round(mm.y)]),
     dr:drops.map(d=>[d.id,d.kind,d.n,Math.round(d.x),Math.round(d.y)]),
-    bo:[blow.phase,Math.ceil(blow.t)],
+    bo:[blow.phase,blow.t<60?+blow.t.toFixed(1):Math.ceil(blow.t)],
     fx:NET.fx.splice(0,NET.fx.length)};
 }
 const netE={m:new Map(),b:new Map(),n:new Map(),dr:new Map(),pl:new Map()};
@@ -877,8 +933,7 @@ function netDamage(m){
   if(m.n>0){ player.hp-=player.hasSuit?m.n*.65:m.n; player.hurtT=.3;
     shake=Math.min(14,shake+4); AU.hurt(); }
   if(m.fx){ if(m.fx.b)player.burn=Math.max(player.burn,1.2);
-    if(m.fx.s)player.stun=Math.max(player.stun,.35);
-    if(m.fx.t){ player.kx+=m.fx.t[0]; player.ky+=m.fx.t[1]; player.thrown=.5; } }
+    if(m.fx.t){ player.kx+=m.fx.t[0]; player.ky+=m.fx.t[1]; } }
   if(m.n>0&&player.hp<=0) die(m.src||'Зона');
 }
 function allPlayers(){
@@ -891,8 +946,7 @@ function damagePlayer(pid,n,src,fx){
     if(n>0){ player.hp-=player.hasSuit?n*.65:n; player.hurtT=.3;
       shake=Math.min(14,shake+4); AU.hurt(); }
     if(fx){ if(fx.b)player.burn=Math.max(player.burn,1.2);
-      if(fx.s)player.stun=Math.max(player.stun,.35);
-      if(fx.t){ player.kx+=fx.t[0]; player.ky+=fx.t[1]; player.thrown=.5; } }
+      if(fx.t){ player.kx+=fx.t[0]; player.ky+=fx.t[1]; } }
     if(n>0&&player.hp<=0) die(src);
   } else {
     const c=NET.conns.find(c=>c.id===pid);
@@ -922,7 +976,7 @@ addEventListener('mousedown',e=>{ if(e.button===0&&e.target===cv){mouse.down=tru
 addEventListener('mouseup',e=>{ if(e.button===0)mouse.down=false; });
 addEventListener('contextmenu',e=>e.preventDefault());
 addEventListener('wheel',e=>{ if(state!=='play')return;
-  const dir=e.deltaY>0?1:-1; switchW(clamp(player.wi+dir,0,3)); },{passive:true});
+  nextWeapon(e.deltaY>0?1:-1); },{passive:true});
 
 const joy={mId:null,mOx:0,mOy:0,mx:0,my:0,aId:null,aOx:0,aOy:0,ax:0,ay:0,amag:0,aang:0};
 const JR=56;
@@ -959,7 +1013,7 @@ function enableTouchUI(){
   document.getElementById('mbtns').classList.remove('hidden');
   document.getElementById('keysDesk').classList.add('hidden');
   document.getElementById('keysTouch').classList.remove('hidden');
-  document.getElementById('closeHint').innerHTML='Кнопка <b style="color:#dfe4cd">E</b> — закрыть';
+  document.getElementById('closeHint').innerHTML='Кнопка <b style="color:#dfe4cd">✕ ЗАКРЫТЬ</b> — закрыть';
 }
 document.addEventListener('touchstart',()=>{ AU.init(); enableTouchUI(); },{passive:true});
 
@@ -981,15 +1035,16 @@ function bindBtn(id,fn){ const el=document.getElementById(id);
 bindBtn('mbR',()=>startReload());
 bindBtn('mbH',()=>useMed());
 bindBtn('mbE',()=>{ if(state==='trade')closeTrade(); else if(state==='play')interact(); });
-bindBtn('mbW',()=>switchW((player.wi+1)%4));
+bindBtn('mbW',()=>nextWeapon(1));
+bindBtn('closeBtn',()=>closeTrade());
 function updateBtns(){ document.getElementById('mbW').childNodes[0].textContent=WEAPONS[player.wi].name;
   document.getElementById('mbHn').textContent=player.meds; }
 if(IS_TOUCH){ document.getElementById('mbtns').classList.remove('hidden');
   document.getElementById('keysDesk').classList.add('hidden');
   document.getElementById('keysTouch').classList.remove('hidden');
-  document.getElementById('closeHint').innerHTML='Кнопка <b style="color:#dfe4cd">E</b> — закрыть'; }
+  document.getElementById('closeHint').innerHTML='Кнопка <b style="color:#dfe4cd">✕ ЗАКРЫТЬ</b> — закрыть'; }
 
-/* ================= UI / КВЕСТЫ ================= */
+/* ================= UI ================= */
 function toast(txt,cls){ const t=document.createElement('div'); t.className='toast'+(cls?' '+cls:'');
   t.textContent=txt; document.getElementById('toasts').appendChild(t);
   setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .5s';},3200); setTimeout(()=>t.remove(),3800); }
@@ -1022,7 +1077,7 @@ function startGame(isMp){
   ensureChunks(1); ensureLandmarks();
   if(isMp) toast('Вы в Зоне вместе. Держитесь рядом — прикрывайте друг друга');
   else toast('Ты в Зоне. Бункер Сидоровича рядом — зелёная метка');
-  setTimeout(()=>toast('Твари бьют и отскакивают — бей на их отходе','gr'),3500);
+  setTimeout(()=>toast('Твари бьют и лишь слегка отпрыгивают — держи дистанцию','gr'),3500);
   setTimeout(()=>toast('Услышал сирену — Выброс. Беги в укрытие (синие метки)','red'),7000);
 }
 document.getElementById('btnStart').addEventListener('click',()=>startGame(false));
@@ -1189,6 +1244,13 @@ function blood(x,y,n,dir){ for(let i=0;i<n;i++){ const a=dir!==undefined?dir+rnd
   part(x,y,Math.cos(a)*s,Math.sin(a)*s,rnd(.2,.5),rnd(1.5,3.2),'#8a1c10','blood'); } }
 function switchW(i){ if(i===player.wi)return; if(i===2&&!player.hasAk)return;
   player.wi=i; player.reloading=0; AU.click(); updateBtns(); }
+/* ИСПРАВЛЕНО: цикл идёт только по доступным стволам — заблокированный АКМ перепрыгивается */
+function nextWeapon(dir){
+  const av=[0,1]; if(player.hasAk)av.push(2); av.push(3);
+  let i=av.indexOf(player.wi); if(i<0)i=0;
+  i=(i+dir+av.length)%av.length;
+  switchW(av[i]);
+}
 function startReload(){ const w=WEAPONS[player.wi];
   if(w.melee||player.reloading>0||player.mags[player.wi]>=w.mag||player.reserve[w.ammo]<=0)return;
   player.reloading=1.4; AU.reload(); }
@@ -1287,10 +1349,20 @@ const PHRASES=['«В Кратере карусели в два ряда — та
  '«До Маяка кто дошёл — тот легендой стал. Или не дошёл.»',
  '«Кабан бьёт один раз и пятится. Вот в этот момент его и бей.»',
  '«Завод «Прометей»? Там цеха пустые, а тварей — полные цеха.»',
- '«Мёртвый лес на краю мира. Отшельник там живёт. Говорит, бусы в карусели у него за домом.»',
+ '«Мёртвый лес на краю мира. Отшельник живёт, и карусель у него за домом.»',
  '«Бандитов мочи — мы такое уважаем. Может, и прикроем когда надо.»',
  '«Не стреляй в своих. Здешние и так не кофе пьют.»',
  '«Напарника привёл? Хорошо. Вдвоём и гигант по зубам.»'];
+const SIDOR_LINES=['«Асфальт в Зоне совсем стал… не асфальт.»',
+ '«Может, тебе ещё и ключи от квартиры, где деньги лежат?»',
+ '«Артефакты тащи, а не эти твои истории. Мне истории не платят.»',
+ '«Радио ловит только помехи. Зато какие душевные.»',
+ '«Кто-то тушёнку мою трогал. Штырь, это не ты случайно?»',
+ '«Выброс был? Ну был и был. Здесь каждый день что-то было.»',
+ '«Скидку заслужил — бери, пока я добрый.»',
+ '«Дверь закрой, сквозит.»'];
+let sidorSayT=6;
+
 const REGIONS=[
   ['Свалка',1000,1900,900],['Руины у лагеря',2300,2350,800],['Озеро',3650,2150,700],
   ['Тёмная долина',3550,3750,800],['Агропром',2150,800,800],['Радар',3950,850,900],
@@ -1319,9 +1391,9 @@ function updatePlayer(dt){
   const joyMag=joyActive?clamp(Math.hypot(joy.mx,joy.my)/JR,0,1):0;
   const run=moving&&player.stam>1&&(k['ShiftLeft']||(joyActive&&joyMag>.92));
   player.stam=clamp(player.stam+(run?-20:16)*dt,0,100);
+  if(player.stun>0)player.stun-=dt;
+  if(player.thrown>0)player.thrown-=dt;
   let sp=(run?SPD.run:SPD.walk)*(joyActive?(.4+.6*joyMag):1);
-  if(player.stun>0){ sp=0; player.stun-=dt; }
-  if(player.thrown>0){ sp=0; player.thrown-=dt; }
   if(moving) player.walk+=dt*(run?13:8);
   player.x+=(mx*sp+player.kx)*dt; player.y+=(my*sp+player.ky)*dt;
   const kd=Math.pow(.02,dt); player.kx*=kd; player.ky*=kd;
@@ -1355,7 +1427,21 @@ function updatePlayer(dt){
   recoil=Math.max(0,recoil-dt*4);
 }
 
-/* --- ИИ мутантов: удар → отход → сближение --- */
+function updateSidor(dt){
+  const d=dist(player.x,player.y,TRADER.x,TRADER.y);
+  if(d<170) TRADER.angle=angTo(TRADER.x,TRADER.y,player.x,player.y);
+  else TRADER.angle=Math.PI;
+  if(d<500&&Math.random()<dt*2.2)
+    part(TRADER.x+Math.cos(TRADER.angle)*7,TRADER.y+Math.sin(TRADER.angle)*7-4,
+      rnd(-6,6),-rnd(10,22),rnd(.8,1.6),rnd(1.6,3),'rgba(140,140,140,.5)','smoke');
+  sidorSayT-=dt;
+  if(d<160&&sidorSayT<=0&&state==='play'){
+    sidorSayT=rnd(14,26);
+    toast('Сидорович: '+pick(SIDOR_LINES));
+  }
+}
+
+/* --- ИИ: короткий отход после удара --- */
 function updateMutants(dt){
   const pls=allPlayers();
   for(let i=mutants.length-1;i>=0;i--){ const m=mutants[i];
@@ -1392,7 +1478,7 @@ function updateMutants(dt){
         else if(d>26){ vx=Math.cos(a)*m.sp; vy=Math.sin(a)*m.sp; }
         if(d<26&&m.atkT<=0&&m.lunge>0){ m.atkT=.9; m.lunge=0;
           damagePlayer(tp.id,22,'Кровосос'); blood(tp.x,tp.y,6);
-          m.retreat=2.2; m.retSp=m.sp*1.3; }
+          m.retreat=RETREAT.bs[0]; m.retSp=m.sp*RETREAT.bs[1]; }
       }
       else if(m.kind==='boar'){
         m.chargeCd-=dt;
@@ -1402,14 +1488,14 @@ function updateMutants(dt){
           if(d<(m.r+tp.r+8)&&m.atkT<=0){ m.atkT=1; m.charge=0;
             damagePlayer(tp.id,18,'Кабан',{t:[Math.cos(m.chargeA)*420,Math.sin(m.chargeA)*420]});
             blood(tp.x,tp.y,7);
-            m.retreat=2.6; m.retSp=m.sp*1.5; }
+            m.retreat=RETREAT.boar[0]; m.retSp=m.sp*RETREAT.boar[1]; }
         }
         else if(d<400&&d>110&&m.chargeCd<=0){ m.charge=.8; m.chargeA=a; m.chargeCd=3.8; AU.growl(); }
         else {
           if(d>110){ vx=Math.cos(a)*m.sp; vy=Math.sin(a)*m.sp; }
           if(d<(m.r+tp.r+14)&&m.atkT<=0){ m.atkT=1.1;
             damagePlayer(tp.id,9,'Кабан'); blood(tp.x,tp.y,4);
-            m.retreat=2.2; m.retSp=m.sp*1.5; } }
+            m.retreat=1.1; m.retSp=m.sp*RETREAT.boar[1]; } }
       }
       else if(m.kind==='giant'){
         m.stompCd-=dt;
@@ -1422,11 +1508,11 @@ function updateMutants(dt){
               if(p.id===0)blood(p.x,p.y,6); } }
           if(merc.alive&&dist(m.x,m.y,merc.x,merc.y)<160){ merc.hp-=60; }
           for(const o of mutants) if(o!==m&&dist(o.x,o.y,m.x,m.y)<160){ o.hp-=80; o.hurtA=.5; }
-          m.retreat=1.8; m.retSp=m.sp*1.4; }
+          m.retreat=RETREAT.giant[0]; m.retSp=m.sp*RETREAT.giant[1]; }
         else if(d>52){ vx=Math.cos(a)*m.sp; vy=Math.sin(a)*m.sp;
           if(d<52&&m.atkT<=0){ m.atkT=1.4;
             damagePlayer(tp.id,12,'Псевдогигант'); blood(tp.x,tp.y,5);
-            m.retreat=1.4; m.retSp=m.sp*1.4; } }
+            m.retreat=.9; m.retSp=m.sp*RETREAT.giant[1]; } }
       }
       else {
         if(d>(m.r+tp.r+10)){ vx=Math.cos(a)*m.sp; vy=Math.sin(a)*m.sp; }
@@ -1434,8 +1520,8 @@ function updateMutants(dt){
           m.atkT=m.kind==='dog'?.8:1.4;
           damagePlayer(tp.id,m.kind==='dog'?9:14,m.kind==='dog'?'Стая слепых псов':'Зомби');
           blood(tp.x,tp.y,5);
-          m.retreat=m.kind==='dog'?rnd(1.4,2.2):1.2;
-          m.retSp=m.kind==='dog'?m.sp*1.05:m.sp*1.4; }
+          if(m.kind==='dog'){ m.retreat=rnd(RETREAT.dog[0],RETREAT.dog[1]); m.retSp=m.sp*1.0; }
+          else { m.retreat=RETREAT.zombie[0]; m.retSp=m.sp*1.3; } }
       }
     } else {
       m.wt-=dt; if(m.wt<=0){ m.wt=rnd(2,5); m.tx=m.x+rnd(-260,260); m.ty=m.y+rnd(-260,260); }
@@ -1448,7 +1534,6 @@ function updateMutants(dt){
     collideWorld(m);
     if(vx||vy)m.dirA=angTo(0,0,vx,vy);
   }
-  /* выгрузка далёких тварей */
   for(let i=mutants.length-1;i>=0;i--)
     if(dist(mutants[i].x,mutants[i].y,player.x,player.y)>6200) mutants.splice(i,1);
   for(let i=bandits.length-1;i>=0;i--)
@@ -1627,7 +1712,7 @@ function updateAnomalies(dt){
           part(an.x,an.y,Math.cos(a)*s,Math.sin(a)*s-40,rnd(.3,.7),rnd(2,4),'#ff8a30','fire'); } }
       if(an.type==='electra'){
         if(!isP){ t.hp-=45;t.hurtA=.6; }
-        else damagePlayer(t.id,26,'Электра',{s:1});
+        else damagePlayer(t.id,26,'Электра');
         for(let i2=0;i2<5;i2++){ const n2=pick(an.nodes.length?an.nodes:[{x:an.x,y:an.y}]);
           an.bolts.push({ax:an.x+rnd(-30,30),ay:an.y+rnd(-30,30),
             bx:(isP?t.x:n2.x),by:(isP?t.y:n2.y),t:.09}); } }
@@ -1683,7 +1768,7 @@ function updateBlow(dt){
         else damagePlayer(p.id,3.25,'Выброс'); } }
     if(Math.random()<dt*3)toastOnce();
     if(blow.t<=0){ blow.phase='idle'; blow.t=rnd(150,220); AU.rumbleStop();
-      toast('Выброс прошёл. Аномалии перестроились — артефакты обновились','gr'); } }
+      toast('Выброс прошёл. Аномалии перестроились','gr'); } }
 }
 function toastOnce(){ if(toastCd>0)return; toastCd=3; toast('Ты под Выбросом! В укрытие!','red'); }
 
@@ -1708,6 +1793,26 @@ function drawHuman(x,y,a,phase,opt){
   ctx.fillStyle=opt.head||'#3a3a30'; ctx.beginPath(); ctx.arc(1,0,4.6,0,TAU); ctx.fill();
   if(opt.band){ ctx.fillStyle=opt.band; ctx.fillRect(-3.4,-4.6,2.6,9.2); }
   ctx.fillStyle=opt.mask||'rgba(200,205,190,.55)'; ctx.beginPath(); ctx.ellipse(4,0,1.8,3,0,0,TAU); ctx.fill();
+  ctx.restore();
+}
+function drawSidor(x,y,a){
+  ctx.save(); ctx.translate(x,y);
+  ctx.fillStyle='rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(1,4,13,7,0,0,TAU); ctx.fill();
+  ctx.rotate(a);
+  ctx.fillStyle='#3a3020';
+  ctx.beginPath(); ctx.ellipse(1,-5,5,3.4,0,0,TAU); ctx.ellipse(1,5,5,3.4,0,0,TAU); ctx.fill();
+  ctx.fillStyle='#6a5a3a'; ctx.beginPath(); ctx.ellipse(0,0,12,10,0,0,TAU); ctx.fill();
+  ctx.strokeStyle='#3c3220'; ctx.lineWidth=1.6; ctx.stroke();
+  ctx.fillStyle='#7a6a46'; ctx.beginPath(); ctx.ellipse(2,1,8.5,7,0,0,TAU); ctx.fill();
+  ctx.strokeStyle='#5a4a2e'; ctx.lineWidth=3.6; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(4,-6); ctx.quadraticCurveTo(10,-1,7,3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(4,6); ctx.quadraticCurveTo(10,1,7,-3); ctx.stroke();
+  ctx.fillStyle='#3c3830'; ctx.beginPath(); ctx.arc(1,0,5.2,0,TAU); ctx.fill();
+  ctx.fillStyle='#5a5245'; ctx.beginPath(); ctx.arc(3,0,3.8,0,TAU); ctx.fill();
+  ctx.fillStyle='#5a5245'; ctx.beginPath(); ctx.arc(5.5,1.4,2.2,0,TAU); ctx.fill();
+  ctx.fillStyle='#c9b888'; ctx.fillRect(7.5,2.2,4.5,1.6);
+  ctx.fillStyle=Math.sin(time*7)>0?'#ff6a30':'#c04018';
+  ctx.beginPath(); ctx.arc(12,3,1,0,TAU); ctx.fill();
   ctx.restore();
 }
 function drawDog(m){
@@ -1846,6 +1951,10 @@ function drawWall(w){
   ctx.fillStyle='rgba(0,0,0,.3)'; ctx.fillRect(w.x,w.y+w.h-3,w.w,3);
   ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=1; ctx.strokeRect(w.x+.5,w.y+.5,w.w-1,w.h-1);
 }
+function drawFloor(f){
+  ctx.fillStyle='#474a41'; ctx.fillRect(f.x,f.y,f.w,f.h);
+  ctx.strokeStyle='rgba(30,32,26,.5)'; ctx.lineWidth=2; ctx.strokeRect(f.x,f.y,f.w,f.h);
+}
 function drawCorpse(c){
   ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.a);
   ctx.fillStyle='rgba(50,10,8,.5)'; ctx.beginPath(); ctx.ellipse(0,2,15,9,0,0,TAU); ctx.fill();
@@ -1882,6 +1991,8 @@ function renderDark(){
     d.fillStyle=gr; d.beginPath(); d.arc(sx,sy,r,0,TAU); d.fill(); };
   for(const f of fires) light(f.x,f.y,210+Math.sin(time*13+f.x)*12,.95);
   light(TRADER.x,TRADER.y,240,.9);
+  light(2050,4240,120,.5);
+  light(1908,4252,70,.4);
   light(player.x,player.y,175,.55);
   for(const m of muzzle) light(m.x,m.y,150,.8);
   for(const an of anomalies){ if(dist(an.x,an.y,player.x,player.y)>1100)continue;
@@ -1896,18 +2007,22 @@ function renderDark(){
     const gr=ctx.createRadialGradient(sx,sy,0,sx,sy,190);
     gr.addColorStop(0,'rgba(255,130,40,.13)'); gr.addColorStop(1,'rgba(255,130,40,0)');
     ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(sx,sy,190,0,TAU); ctx.fill(); }
+  { const sx=1908-camX,sy=4252-camY;
+    if(sx>-80&&sy>-80&&sx<W+80&&sy<H+80){
+      const gr=ctx.createRadialGradient(sx,sy,0,sx,sy,60);
+      gr.addColorStop(0,'rgba(255,120,40,'+(.08+.03*Math.sin(time*9))+')');
+      gr.addColorStop(1,'rgba(255,120,40,0)');
+      ctx.fillStyle=gr; ctx.beginPath(); ctx.arc(sx,sy,60,0,TAU); ctx.fill(); } }
   ctx.globalCompositeOperation='source-over';
 }
 const MINSZ=IS_TOUCH?136:190;
 function drawMini(){
   const mx=W-MINSZ-(IS_TOUCH?58:24), my=IS_TOUCH?12:18;
-  /* локальная карта окрестностей игрока — 3×3 чанка */
   const view=CHUNK*3;
   ctx.fillStyle='rgba(8,10,6,.85)'; ctx.fillRect(mx-4,my-4,MINSZ+8,MINSZ+8);
   const s=MINSZ/view;
   const ox=player.x-view/2, oy=player.y-view/2;
   ctx.save(); ctx.beginPath(); ctx.rect(mx,my,MINSZ,MINSZ); ctx.clip();
-  /* чанки вокруг */
   const pcx=Math.floor(player.x/CHUNK), pcy=Math.floor(player.y/CHUNK);
   for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
     const cx=pcx+dx, cy=pcy+dy;
@@ -1915,6 +2030,8 @@ function drawMini(){
     const cnv=getChunkCanvas(cx,cy);
     ctx.drawImage(cnv,mx+(cx*CHUNK-ox)*s,my+(cy*CHUNK-oy)*s,CHUNK*s+.5,CHUNK*s+.5);
   }
+  for(const f of floorRects) if(f.x+f.w>ox&&f.x<ox+view&&f.y+f.h>oy&&f.y<oy+view){
+    ctx.fillStyle='#474a41'; ctx.fillRect(mx+(f.x-ox)*s,my+(f.y-oy)*s,f.w*s,f.h*s); }
   ctx.strokeStyle=blow.phase!=='idle'&&Math.sin(time*10)>0?'#e04020':'rgba(255,255,255,.25)';
   ctx.lineWidth=1.5; ctx.strokeRect(mx-4,my-4,MINSZ+8,MINSZ+8);
   const dot=(x,y,c,r)=>{ ctx.fillStyle=c; ctx.beginPath();
@@ -1984,9 +2101,17 @@ function drawHUD(){
   if(player.money>=50000){ ctx.fillStyle='#9ac86a'; ctx.fillText('Деньги собраны — к Сидоровичу!',bx,H-(IS_TOUCH?136:140)); }
   const bp=NET.role==='client'?netBlow.phase:blow.phase;
   const bt=NET.role==='client'?netBlow.t:blow.t;
-  if(bp==='warn'){ ctx.textAlign='center'; ctx.fillStyle=Math.sin(time*8)>0?'#e04020':'#802010';
-    ctx.font=(IS_TOUCH?'16px':'22px')+' Russo One'; ctx.fillText('ВЫБРОС ЧЕРЕЗ '+bt+' С — В УКРЫТИЕ',W/2,IS_TOUCH?60:42); }
-  if(bp==='active'){ ctx.textAlign='center'; ctx.fillStyle='#e04020';
+  ctx.textAlign='center';
+  if(bp==='idle'){
+    const tt=Math.max(0,Math.round(bt));
+    const mm=Math.floor(tt/60), ss=tt%60;
+    const soon=tt<60;
+    ctx.fillStyle=soon?(Math.sin(time*6)>0?'#d8a24a':'#8a6a2a'):'rgba(216,162,74,.65)';
+    ctx.font=(IS_TOUCH?'12px':'14px')+' Play';
+    ctx.fillText('Выброс через '+mm+':'+String(ss).padStart(2,'0'),W/2,IS_TOUCH?24:26); }
+  if(bp==='warn'){ ctx.fillStyle=Math.sin(time*8)>0?'#e04020':'#802010';
+    ctx.font=(IS_TOUCH?'16px':'22px')+' Russo One'; ctx.fillText('ВЫБРОС ЧЕРЕЗ '+Math.ceil(bt)+' С — В УКРЫТИЕ',W/2,IS_TOUCH?60:42); }
+  if(bp==='active'){ ctx.fillStyle='#e04020';
     ctx.font=(IS_TOUCH?'16px':'22px')+' Russo One';
     ctx.fillText('ВЫБРОС'+(inShelter(player.x,player.y)?' — ТЫ В УКРЫТИИ':''),W/2,IS_TOUCH?60:42); }
   ctx.textAlign='left';
@@ -2042,17 +2167,20 @@ function render(dt){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.fillStyle='#0a0c08'; ctx.fillRect(0,0,W,H);
   ctx.save(); ctx.translate(-Math.round(camX),-Math.round(camY));
-  /* чанки земли */
   const c0x=Math.floor(camX/CHUNK), c0y=Math.floor(camY/CHUNK);
   const c1x=Math.floor((camX+W)/CHUNK), c1y=Math.floor((camY+H)/CHUNK);
   for(let cx=c0x;cx<=c1x;cx++)for(let cy=c0y;cy<=c1y;cy++){
     if(cx<0||cy<0||cx>=CN||cy>=CN)continue;
     ctx.drawImage(getChunkCanvas(cx,cy),cx*CHUNK,cy*CHUNK,CHUNK,CHUNK);
   }
+  for(const f of floorRects) if(onScr(f.x+f.w/2,f.y+f.h/2,Math.max(f.w,f.h)/2+40)) drawFloor(f);
+  for(const p of props) if(p.under&&onScr(p.x,p.y,80)){ ctx.save();
+    ctx.translate(p.x,p.y); ctx.rotate(p.a); ctx.drawImage(p.spr,-60,-60); ctx.restore(); }
   for(const an of anomalies){ an.t+=dt; if(onScr(an.x,an.y,160)) drawAnomaly(an); }
   const list=[];
-  for(const p of props) if(onScr(p.x,p.y,80)) list.push({y:p.y,f:()=>drawProp(p)});
-  for(const w of wallRects) if(onScr(w.x+w.w/2,w.y+w.h/2,Math.max(w.w,w.h)/2+60))
+  for(const p of props) if(!p.under&&onScr(p.x,p.y,80)) list.push({y:p.y,f:()=>drawProp(p)});
+  /* ИСПРАВЛЕНО: невидимые коллизии пропсов (nosee) не рисуются как серые плиты */
+  for(const w of wallRects) if(!w.nosee&&onScr(w.x+w.w/2,w.y+w.h/2,Math.max(w.w,w.h)/2+60))
     list.push({y:w.y+w.h,f:()=>drawWall(w)});
   for(const c of corpses) if(onScr(c.x,c.y,60)) list.push({y:c.y-1,f:()=>drawCorpse(c)});
   const drSrc=NET.role==='client'?[...netE.dr.values()]:drops;
@@ -2092,6 +2220,7 @@ function render(dt){
       {body:'#3d4a55',legs:'#2a2d20',head:'#3a3d2c',pack:'#33361f',gun:WEAPONS[p.wi||0].len,sleeve:'#43462e',band:'#60a0e0'});
       ctx.fillStyle='rgba(220,235,255,.85)'; ctx.font='11px Play'; ctx.textAlign='center';
       ctx.fillText(p.name||'',px2,py2-20); ctx.textAlign='left'; }}); }
+  list.push({y:TRADER.y,f:()=>drawSidor(TRADER.x,TRADER.y,TRADER.angle)});
   list.push({y:player.y,f:()=>{
     drawHuman(player.x,player.y,player.angle,player.walk,{body:player.hasSuit?'#3d4a55':'#4a4d33',
       legs:'#2a2d20',head:'#3a3d2c',pack:'#33361f',gun:WEAPONS[player.wi].len,sleeve:'#43462e'});
@@ -2108,15 +2237,15 @@ function render(dt){
     if(p.type==='blood')ctx.fillStyle='rgba(138,28,16,'+al+')';
     else if(p.type==='spark')ctx.fillStyle='rgba(255,210,120,'+al+')';
     else if(p.type==='fire')ctx.fillStyle='rgba(255,'+Math.floor(120+100*al)+',40,'+al+')';
-    else if(p.type==='smoke')ctx.fillStyle='rgba(60,60,60,'+al*.5+')';
+    else if(p.type==='smoke')ctx.fillStyle='rgba(140,140,140,'+al*.4+')';
     else if(p.type==='dust')ctx.fillStyle='rgba(184,168,136,'+al*.7+')';
     else ctx.fillStyle=p.color;
     ctx.globalAlpha=1; ctx.beginPath(); ctx.arc(p.x,p.y,p.size*(p.type==='smoke'?(2-al):1),0,TAU); ctx.fill(); }
   ctx.restore();
   renderDark();
   if(player.hurtT>0){ ctx.fillStyle='rgba(180,30,20,'+player.hurtT*.6+')'; ctx.fillRect(0,0,W,H); }
-  const bp=NET.role==='client'?netBlow.phase:blow.phase;
-  if(bp==='active'){ const sh=inShelter(player.x,player.y);
+  const bp2=NET.role==='client'?netBlow.phase:blow.phase;
+  if(bp2==='active'){ const sh=inShelter(player.x,player.y);
     const al=(sh?.05:.1)+.06*Math.sin(time*6);
     ctx.fillStyle='rgba(220,50,20,'+al+')'; ctx.fillRect(0,0,W,H); }
   ctx.drawImage(vigC,0,0);
@@ -2138,9 +2267,9 @@ function loop(ts){
         stats.time+=dt; if(toastCd>0)toastCd-=dt;
         mouse.wx=mouse.x+camX; mouse.wy=mouse.y+camY;
         updatePlayer(dt); updateDrops(dt); checkRegions();
+        updateSidor(dt);
         ensureChunks(dt); ensureLandmarks();
         if(simulating){
-          /* заселение чанков вокруг */
           const pcx=Math.floor(player.x/CHUNK), pcy=Math.floor(player.y/CHUNK);
           for(let dx=-2;dx<=2;dx++)for(let dy=-2;dy<=2;dy++){
             const cx=pcx+dx, cy=pcy+dy;
@@ -2176,8 +2305,8 @@ function loop(ts){
     render(dt);
   }catch(e){ console.error(e); }
 }
-/* предгенерация стартового чанка, чтобы мир был готов к первому кадру */
-ensureChunks(1); ensureLandmarks();
+try{ ensureChunks(1); ensureLandmarks(); }
+catch(e){ console.error('Ошибка генерации мира:', e); }
 requestAnimationFrame(loop);
 </script>
 </body>

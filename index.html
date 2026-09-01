@@ -786,6 +786,8 @@ function prop(type,x,y,a,r,hw,hh){
   return p;
 }
 function patrolGroup(x,y,n){
+  n=Math.min(n||3,3);
+  if(dist(x,y,TRADER.x,TRADER.y)<1100)return;
   for(let i=0;i<n;i++)
     npcs.push({id:++MID,x:x+rnd(-40,40),y:y+rnd(-40,40),angle:rnd(0,TAU),walk:0,hostile:false,
       hp:70,shootT:0,say:0,patrol:true,hx:x,hy:y,tx:x,ty:y,wt:rnd(1,4)});
@@ -814,9 +816,8 @@ const LANDMARKS=[
    fires.push({x:1800,y:4330});
    npcs.push({id:++MID,x:1795,y:4355,angle:-2,walk:0,hostile:false,hp:70,shootT:0,say:0});
    npcs.push({id:++MID,x:1822,y:4332,angle:-1.5,walk:0,hostile:false,hp:70,shootT:0,say:0});
-   npcs.push({id:++MID,x:1768,y:4330,angle:-2.4,walk:0,hostile:false,hp:70,shootT:0,say:0});
-   patrolGroup(2450,4300,3);
-   patrolGroup(2300,3900,2); }},
+   npcs.push({id:++MID,x:1768,y:4330,angle:-2.4,walk:0,hostile:false,hp:70,shootT:0,say:0});   
+   }},
  {k:'dump',cx:0,cy:0,fn(){
    building(700,1820,150,150,{s:[40]},false);
    shelters.push({x:700,y:1820,w:150,h:150,n:'Подвал на свалке'}); fires.push({x:950,y:1750});
@@ -1492,7 +1493,7 @@ function pushFromNpcs(e){
       const a=angTo(n.x,n.y,e.x,e.y), ov=min-d;
       e.x+=Math.cos(a)*ov*.75; e.y+=Math.sin(a)*ov*.75;
       if(!NET.role!=='client'){} /* npcs on host get pushed back below */
-      if(NET.role!=='client'){ n.x-=Math.cos(a)*ov*.25; n.y-=Math.sin(a)*ov*.25; }
+       if(NET.role!=='client'){ n.x-=Math.cos(a)*ov*.25; n.y-=Math.sin(a)*ov*.25; collideWorld(n); }
     } }
 }
 function los(x1,y1,x2,y2){
@@ -1669,8 +1670,8 @@ function updatePlayer(dt){
   if(moving) player.walk+=dt*(run?13:8);
   player.x+=(mx*sp+player.kx)*dt; player.y+=(my*sp+player.ky)*dt;
   const kd=Math.pow(.02,dt); player.kx*=kd; player.ky*=kd;
-  collideWorld(player);
   pushFromNpcs(player);
+  collideWorld(player);
   const joyAim=joy.aId!==null&&joy.amag>.12;
   if(joyAim) player.angle=joy.aang;
   else if(!IS_TOUCH) player.angle=angTo(player.x,player.y,mouse.wx,mouse.wy);
@@ -2067,7 +2068,7 @@ function updateBlow(dt){
   blow.t-=dt;
   if(blow.phase==='idle'&&blow.t<=0){ blow.phase='warn'; blow.t=18; AU.siren();
     setTimeout(()=>AU.siren(),4500); setTimeout(()=>AU.siren(),9000); setTimeout(()=>AU.siren(),13500);
-    toast('ВНИМАНИЕ: ВЫБРОС! Бегом в укрытие!','red'); }
+    if(!inShelter(player.x,player.y))toast('ВНИМАНИЕ: ВЫБРОС! Бегом в укрытие!','red'); }
   else if(blow.phase==='warn'&&blow.t<=0){ blow.phase='active'; blow.t=24; AU.rumbleStart(); shake=6;
     for(const m of mutants){ m.aggro=true; const tp=nearestPlayer(m.x,m.y,1e9); if(tp)m.tid=tp.id; } }
   else if(blow.phase==='active'){
@@ -2083,7 +2084,7 @@ function updateBlow(dt){
     if(blow.t<=0){ blow.phase='idle'; blow.t=rnd(150,220); AU.rumbleStop();
       toast('Выброс прошёл. Аномалии перестроились','gr'); } }
 }
-function toastOnce(){ if(toastCd>0)return; toastCd=3; toast('Ты под Выбросом! В укрытие!','red'); }
+function toastOnce(){ if(inShelter(player.x,player.y))return; if(toastCd>0)return; toastCd=3; toast('Ты под выбросом! В укрытии!','red'); }
 
 /* НОВОЕ: вороны — живность над головой */
 const crows=[]; let crowT=5;
@@ -2470,11 +2471,20 @@ function drawHUD(){
     bar(bx,my2,110,7,merc.hp/merc.maxHp,'#4a7a3a');
     ctx.fillStyle='#8b937d'; ctx.font='11px Play';
     ctx.fillText('НАЁМНИК «ПУСТОЙ»',bx+118,my2+7); }
-  const RX=W-(IS_TOUCH?176:24);
+    const RX=W-(IS_TOUCH?176:24);
   const w=WEAPONS[player.wi];
-  ctx.textAlign='right'; ctx.fillStyle='#cdd5bd';
-  ctx.font=(IS_TOUCH?'13px':'15px')+' Play';
-  ctx.fillText(w.name,RX,H-(IS_TOUCH?46:56));
+  if(IS_TOUCH){
+    ctx.textAlign='left'; ctx.fillStyle='#e8ecd9';
+    ctx.font='13px Play';
+    ctx.fillText(w.mele?'—':(player.reloading>0?'--':player.mags[player.wi]+' / '+player.reserve[w.ammo]),14,H-14);
+  }else{
+    ctx.textAlign='right'; ctx.fillStyle='#cdd5bd';
+    ctx.font='15px Play';
+    ctx.fillText(w.name,RX,H-56);
+    ctx.font='26px Play';
+    ctx.fillStyle='#e8ecd9';
+    ctx.fillText(w.mele?'—':(player.reloading>0?'--':player.mags[player.wi]+' / '+player.reserve[w.ammo]),RX,H-28);
+  }
   ctx.font=(IS_TOUCH?'22px':'26px')+' Play';
   ctx.fillStyle='#e8ecd9';
   ctx.fillText(w.melee?'—':(player.reloading>0?'--':player.mags[player.wi]+' / '+player.reserve[w.ammo]),RX,H-(IS_TOUCH?20:28));
@@ -2498,7 +2508,7 @@ function drawHUD(){
       ctx.fillStyle='#c0a030'; ctx.font=(IS_TOUCH?'13px':'16px')+' Play';
       ctx.fillText('ПЕРИМЕТР — ВЫСОКИЙ РАДИАЦИОННЫЙ ФОН',W/2,IS_TOUCH?46:50); } }
   if(bp==='warn'){ ctx.fillStyle=Math.sin(time*8)>0?'#e04020':'#802010';
-    ctx.font=(IS_TOUCH?'16px':'22px')+' Russo One'; ctx.fillText('ВЫБРОС ЧЕРЕЗ '+Math.ceil(bt)+' С — В УКРЫТИЕ',W/2,IS_TOUCH?60:42); }
+    ctx.font=(IS_TOUCH?'16px':'22px')+' Russo One'; ctx.fillText('ВЫБРОС через '+Math.ceil(bt)+' с'+(inShelter(player.x,player.y)?'':' — БЕГОМ В УКРЫТИЕ'),W/2,IS_TOUCH?60:42);
   if(bp==='active'){ ctx.fillStyle='#e04020';
     ctx.font=(IS_TOUCH?'16px':'22px')+' Russo One';
     ctx.fillText('ВЫБРОС'+(inShelter(player.x,player.y)?' — ТЫ В УКРЫТИИ':''),W/2,IS_TOUCH?60:42); }

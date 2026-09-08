@@ -1,996 +1,450 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Voxel Fantasy — Isometric Demo</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            overflow: hidden;
-            background: #0a0a12;
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            user-select: none;
-        }
-        canvas {
-            display: block;
-        }
-
-        #ui {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: rgba(255, 255, 255, 0.5);
-            font-size: 13px;
-            letter-spacing: 0.5px;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 8px 18px;
-            border-radius: 20px;
-            backdrop-filter: blur(6px);
-            pointer-events: none;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            font-weight: 300;
-            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
-        }
-        #ui span {
-            display: inline-block;
-            margin: 0 10px;
-            opacity: 0.5;
-        }
-        #ui .key {
-            background: rgba(255, 255, 255, 0.08);
-            padding: 0 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            opacity: 0.7;
-        }
-
-        #crosshair {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        #crosshair.active {
-            opacity: 1;
-        }
-        #crosshair::before,
-        #crosshair::after {
-            content: '';
-            position: absolute;
-            background: rgba(255, 255, 255, 0.25);
-        }
-        #crosshair::before {
-            width: 2px;
-            height: 20px;
-            top: -10px;
-            left: -1px;
-        }
-        #crosshair::after {
-            width: 20px;
-            height: 2px;
-            top: -1px;
-            left: -10px;
-        }
-
-        @media (max-width: 600px) {
-            #ui {
-                font-size: 11px;
-                padding: 6px 14px;
-                bottom: 16px;
-                max-width: 90%;
-            }
-            #ui span {
-                margin: 0 5px;
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Isometric Voxel Fantasy · Wet Floor</title>
+  <style>
+    body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+    #info {
+      position: absolute; bottom: 20px; left: 20px; color: #ccd; 
+      background: rgba(10,10,20,0.5); padding: 8px 16px; border-radius: 40px;
+      backdrop-filter: blur(4px); pointer-events: none; font-size: 14px;
+      border: 1px solid #4a4a6a;
+    }
+    #info i { font-style: normal; display: inline-block; margin: 0 6px; }
+    #controls-hint {
+      position: absolute; bottom: 20px; right: 20px; color: #aab;
+      background: rgba(0,0,0,0.4); padding: 10px 14px; border-radius: 30px;
+      font-size: 13px; backdrop-filter: blur(3px); border: 1px solid #3a3a5a;
+      pointer-events: none; text-align: right; line-height: 1.6;
+    }
+    canvas { display: block; }
+    @media (max-width: 600px) {
+      #controls-hint { display: none; }
+      #info { font-size: 12px; bottom: 12px; left: 12px; }
+    }
+  </style>
 </head>
 <body>
+  <div id="info">🗡️ FANTASY · <span id="pos-indicator">standing still</span></div>
+  <div id="controls-hint">🖱️ click → move<br>↔ drag → rotate<br>🔍 scroll → zoom</div>
 
-    <div id="ui">
-        <span class="key">🖱 click</span> move
-        <span>·</span>
-        <span class="key">↔ drag</span> orbit
-        <span>·</span>
-        <span class="key">⇅ scroll</span> zoom
-    </div>
-    <div id="crosshair"></div>
+  <!-- Import maps & Three.js from CDN -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+      }
+    }
+  </script>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { Reflector } from 'three/addons/objects/Reflector.js';
+    // ---- setup scene ----
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111a22);
+    scene.fog = new THREE.Fog(0x111a22, 20, 50);
 
-        // ─── SETUP ──────────────────────────────────────────────────────────
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0b0b18);
-        scene.fog = new THREE.Fog(0x0b0b18, 18, 45);
+    const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(12, 10, 14);
+    camera.lookAt(0, 0, 0);
 
-        const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 80);
-        camera.position.set(14, 12, 16);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    document.body.appendChild(renderer.domElement);
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.0;
-        renderer.outputColorSpace = THREE.SRGBColorSpace;
-        document.body.prepend(renderer.domElement);
+    // ---- controls (orbit with lazy follow) ----
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 1.5, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.12;
+    controls.maxPolarAngle = Math.PI / 2.2;
+    controls.minDistance = 5;
+    controls.maxDistance = 28;
+    controls.update();
 
-        // ─── CONTROLS (custom hybrid) ─────────────────────────────────────
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.target.set(0, 1, 0);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.08;
-        controls.minDistance = 5;
-        controls.maxDistance = 35;
-        controls.maxPolarAngle = Math.PI / 2.15;
-        controls.minPolarAngle = Math.PI / 5;
-        controls.autoRotate = false;
-        controls.update();
+    // ---- lights ----
+    const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+    scene.add(ambientLight);
 
-        // ─── LIGHTS ────────────────────────────────────────────────────────
-        const ambientLight = new THREE.AmbientLight(0x223355, 0.3);
-        scene.add(ambientLight);
+    const mainLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+    mainLight.position.set(8, 15, 5);
+    mainLight.castShadow = true;
+    mainLight.shadow.mapSize.width = 1024;
+    mainLight.shadow.mapSize.height = 1024;
+    mainLight.shadow.camera.near = 0.5;
+    mainLight.shadow.camera.far = 30;
+    mainLight.shadow.camera.left = -15;
+    mainLight.shadow.camera.right = 15;
+    mainLight.shadow.camera.top = 15;
+    mainLight.shadow.camera.bottom = -15;
+    scene.add(mainLight);
 
-        const hemiLight = new THREE.HemisphereLight(0x6688cc, 0x223322, 0.6);
-        scene.add(hemiLight);
+    const fillLight = new THREE.DirectionalLight(0x88aaff, 0.5);
+    fillLight.position.set(-5, 3, -8);
+    scene.add(fillLight);
 
-        const dirLight = new THREE.DirectionalLight(0xffeedd, 1.8);
-        dirLight.position.set(12, 18, 6);
-        dirLight.castShadow = true;
-        dirLight.shadow.mapSize.width = 2048;
-        dirLight.shadow.mapSize.height = 2048;
-        dirLight.shadow.camera.near = 0.5;
-        dirLight.shadow.camera.far = 45;
-        dirLight.shadow.camera.left = -20;
-        dirLight.shadow.camera.right = 20;
-        dirLight.shadow.camera.top = 20;
-        dirLight.shadow.camera.bottom = -20;
-        dirLight.shadow.bias = -0.001;
-        scene.add(dirLight);
+    const rimLight = new THREE.DirectionalLight(0xffaa66, 0.4);
+    rimLight.position.set(-3, 1, 10);
+    scene.add(rimLight);
 
-        const fillLight = new THREE.DirectionalLight(0x4444ff, 0.4);
-        fillLight.position.set(-8, 6, -10);
-        scene.add(fillLight);
+    const pointLight = new THREE.PointLight(0xff8833, 0.6, 20);
+    pointLight.position.set(2, 4, -3);
+    scene.add(pointLight);
 
-        const rimLight = new THREE.DirectionalLight(0xff8833, 0.3);
-        rimLight.position.set(-4, 2, 12);
-        scene.add(rimLight);
+    // ---- reflective wet floor (voxel-ish grid) ----
+    const floorGroup = new THREE.Group();
+    const gridSize = 16;
+    const tileSize = 1.2;
+    const offset = (gridSize * tileSize) / 2 - tileSize/2;
 
-        // ─── GROUND (reflective wet floor) ──────────────────────────────
-        const groundWidth = 28;
-        const groundDepth = 28;
-
-        // Base ground mesh (dark stone)
-        const groundGeo = new THREE.PlaneGeometry(groundWidth, groundDepth);
-        const groundMat = new THREE.MeshStandardMaterial({
-            color: 0x1a1a2e,
-            roughness: 0.95,
-            metalness: 0.0,
+    // Floor tiles with subtle variation
+    const baseColor = new THREE.Color(0x2a2a3a);
+    const colorVariation = 0.15;
+    for (let i = 0; i < gridSize; i++) {
+      for (let j = 0; j < gridSize; j++) {
+        const x = i * tileSize - offset;
+        const z = j * tileSize - offset;
+        // skip some tiles for "ruin" feel
+        if ((i+j) % 7 === 0 && (i*j) % 3 === 0) continue;
+        
+        const color = baseColor.clone();
+        const r = 0.7 + Math.random() * 0.3;
+        color.multiplyScalar(r);
+        
+        const mat = new THREE.MeshStandardMaterial({
+          color: color,
+          roughness: 0.15,
+          metalness: 0.85,
+          emissive: new THREE.Color(0x111122),
+          emissiveIntensity: 0.08,
         });
-        const groundMesh = new THREE.Mesh(groundGeo, groundMat);
-        groundMesh.rotation.x = -Math.PI / 2;
-        groundMesh.position.y = -0.05;
-        groundMesh.receiveShadow = true;
-        scene.add(groundMesh);
+        const geo = new THREE.BoxGeometry(tileSize * 0.98, 0.2, tileSize * 0.98);
+        const tile = new THREE.Mesh(geo, mat);
+        tile.position.set(x, -0.1, z);
+        tile.receiveShadow = true;
+        tile.castShadow = false;
+        floorGroup.add(tile);
+      }
+    }
 
-        // Reflective wet layer
-        const reflector = new Reflector(
-            new THREE.PlaneGeometry(groundWidth * 0.92, groundDepth * 0.92), {
-                clipBias: 0.003,
-                textureWidth: window.innerWidth * 0.5,
-                textureHeight: window.innerHeight * 0.5,
-                color: new THREE.Color(0x4488bb),
-                recursive: true,
-            }
-        );
-        reflector.rotation.x = -Math.PI / 2;
-        reflector.position.y = 0.02;
-        scene.add(reflector);
+    // Wet reflection overlay: transparent plane with subtle mirror
+    const mirrorMat = new THREE.MeshStandardMaterial({
+      color: 0x446688,
+      emissive: 0x112233,
+      emissiveIntensity: 0.1,
+      roughness: 0.05,
+      metalness: 0.95,
+      transparent: true,
+      opacity: 0.25,
+    });
+    const mirrorPlane = new THREE.Mesh(new THREE.PlaneGeometry(gridSize * tileSize + 2, gridSize * tileSize + 2), mirrorMat);
+    mirrorPlane.rotation.x = -Math.PI / 2;
+    mirrorPlane.position.set(0, 0.05, 0);
+    mirrorPlane.receiveShadow = false;
+    floorGroup.add(mirrorPlane);
 
-        // Water ripple overlay (subtle animated normals)
-        const rippleGeo = new THREE.PlaneGeometry(groundWidth * 0.95, groundDepth * 0.95, 64, 64);
-        const rippleMat = new THREE.ShaderMaterial({
-            uniforms: {
-                uTime: { value: 0 },
-                uColor: { value: new THREE.Color(0x4488bb) },
-            },
-            vertexShader: `
-            varying vec2 vUv;
-            void main() {
-              vUv = uv;
-              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-          `,
-            fragmentShader: `
-            uniform float uTime;
-            uniform vec3 uColor;
-            varying vec2 vUv;
-            void main() {
-              vec2 p = vUv * 6.0;
-              float n = sin(p.x * 1.3 + uTime * 0.4) * cos(p.y * 1.7 + uTime * 0.3);
-              n += sin(p.x * 3.7 + p.y * 2.1 + uTime * 0.7) * 0.3;
-              n = n * 0.5 + 0.5;
-              float alpha = n * 0.08 + 0.02;
-              gl_FragColor = vec4(uColor, alpha);
-            }
-          `,
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-            side: THREE.DoubleSide,
-        });
-        const rippleMesh = new THREE.Mesh(rippleGeo, rippleMat);
-        rippleMesh.rotation.x = -Math.PI / 2;
-        rippleMesh.position.y = 0.04;
-        scene.add(rippleMesh);
+    scene.add(floorGroup);
 
-        // ─── VOXEL TERRAIN ────────────────────────────────────────────────
-        const terrainGroup = new THREE.Group();
-        scene.add(terrainGroup);
+    // ---- environment: ancient pillars, ruins, torches ----
+    function createPillar(x, z, h = 2.0, colorVariant = 0) {
+      const group = new THREE.Group();
+      const baseColor = new THREE.Color(0x7a6a5a);
+      const stoneMat = new THREE.MeshStandardMaterial({
+        color: baseColor.clone().multiplyScalar(0.8 + Math.random()*0.4),
+        roughness: 0.7,
+        metalness: 0.1,
+        emissive: new THREE.Color(0x221100),
+        emissiveIntensity: 0.05,
+      });
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.8, h, 0.8), stoneMat);
+      pillar.position.y = h/2;
+      pillar.castShadow = true;
+      pillar.receiveShadow = true;
+      group.add(pillar);
 
-        const colors = {
-            grass: 0x2d4a3a,
-            darkGrass: 0x1d3528,
-            stone: 0x5a5a6e,
-            darkStone: 0x3a3a4e,
-            dirt: 0x3d2b1f,
-            moss: 0x3d5a3a,
-        };
+      // capital
+      const capMat = new THREE.MeshStandardMaterial({
+        color: 0x8a7a6a,
+        roughness: 0.6,
+        metalness: 0.2,
+      });
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.2, 1.0), capMat);
+      cap.position.y = h + 0.1;
+      cap.castShadow = true;
+      cap.receiveShadow = true;
+      group.add(cap);
 
-        function createVoxel(w, h, d, color, pos, emissive = 0x000000, emissiveIntensity = 0) {
-            const geo = new THREE.BoxGeometry(w, h, d);
-            const mat = new THREE.MeshStandardMaterial({
-                color,
-                roughness: 0.7,
-                metalness: 0.1,
-                emissive,
-                emissiveIntensity,
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(pos.x, pos.y + h / 2, pos.z);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            return mesh;
+      group.position.set(x, 0, z);
+      return group;
+    }
+
+    // scattered pillars
+    const pillarPositions = [
+      [-5, -4], [5, -3], [-4, 5], [4, 4], [-6, 1], [6, -1], [0, -6], [-2, -5], [2, 5]
+    ];
+    pillarPositions.forEach(pos => {
+      const h = 1.8 + Math.random() * 1.2;
+      const pillar = createPillar(pos[0], pos[1], h);
+      scene.add(pillar);
+    });
+
+    // glowing crystal / torch effects (floating embers)
+    function createTorch(x, z) {
+      const group = new THREE.Group();
+      const poleMat = new THREE.MeshStandardMaterial({ color: 0x554433, roughness: 0.8 });
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.9), poleMat);
+      pole.position.y = 0.45;
+      pole.castShadow = true;
+      pole.receiveShadow = true;
+      group.add(pole);
+
+      const flameMat = new THREE.MeshStandardMaterial({
+        color: 0xff6633,
+        emissive: 0xff4400,
+        emissiveIntensity: 0.8,
+      });
+      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.25, 6, 6), flameMat);
+      flame.position.y = 0.95;
+      flame.castShadow = true;
+      group.add(flame);
+
+      // glow point light
+      const light = new THREE.PointLight(0xff5500, 0.6, 5);
+      light.position.set(0, 1.0, 0);
+      group.add(light);
+
+      group.position.set(x, 0, z);
+      return group;
+    }
+
+    const torchPositions = [[-3, -3], [3, -2], [-2, 3], [4, 2], [-4, -4], [2, -4]];
+    torchPositions.forEach(pos => {
+      const t = createTorch(pos[0], pos[1]);
+      scene.add(t);
+    });
+
+    // small ruin stones
+    for (let i = 0; i < 40; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 3 + Math.random() * 6;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      const stoneMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(0x6a5a4a).multiplyScalar(0.6 + Math.random()*0.5),
+        roughness: 0.9,
+      });
+      const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.2 + Math.random()*0.25), stoneMat);
+      stone.position.set(x, 0.1, z);
+      stone.rotation.set(Math.random()*6, Math.random()*6, Math.random()*6);
+      stone.castShadow = true;
+      stone.receiveShadow = true;
+      scene.add(stone);
+    }
+
+    // ---- character (voxel-ish knight) ----
+    const charGroup = new THREE.Group();
+    const charBodyMat = new THREE.MeshStandardMaterial({ color: 0x4a6a8a, roughness: 0.4, metalness: 0.6 });
+    const charDarkMat = new THREE.MeshStandardMaterial({ color: 0x2a3a4a, roughness: 0.6, metalness: 0.3 });
+    const charGoldMat = new THREE.MeshStandardMaterial({ color: 0xccaa66, roughness: 0.3, metalness: 0.7 });
+    const charHeadMat = new THREE.MeshStandardMaterial({ color: 0xdbb88c, roughness: 0.5 });
+
+    // body (torso)
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.6), charBodyMat);
+    torso.position.y = 0.95;
+    torso.castShadow = true;
+    torso.receiveShadow = true;
+    charGroup.add(torso);
+
+    // head
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), charHeadMat);
+    head.position.y = 1.55;
+    head.castShadow = true;
+    head.receiveShadow = true;
+    charGroup.add(head);
+
+    // helmet visor
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 0.1), charGoldMat);
+    visor.position.set(0, 1.55, 0.35);
+    charGroup.add(visor);
+
+    // legs
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x3a4a5a, roughness: 0.7, metalness: 0.2 });
+    const legPos = [[-0.25, 0.35, 0.15], [0.25, 0.35, 0.15], [-0.25, 0.35, -0.15], [0.25, 0.35, -0.15]];
+    legPos.forEach(pos => {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.2), legMat);
+      leg.position.set(pos[0], pos[1], pos[2]);
+      leg.castShadow = true;
+      leg.receiveShadow = true;
+      charGroup.add(leg);
+    });
+
+    // shoulders / pauldrons
+    const pauldronMat = new THREE.MeshStandardMaterial({ color: 0x5a7a8a, roughness: 0.3, metalness: 0.5 });
+    const paulL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 0.5), pauldronMat);
+    paulL.position.set(-0.6, 1.2, 0);
+    paulL.castShadow = true;
+    charGroup.add(paulL);
+    const paulR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.15, 0.5), pauldronMat);
+    paulR.position.set(0.6, 1.2, 0);
+    paulR.castShadow = true;
+    charGroup.add(paulR);
+
+    // sword (held)
+    const swordGroup = new THREE.Group();
+    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xccddee, metalness: 0.9, roughness: 0.2 });
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.8, 0.02), bladeMat);
+    blade.position.y = 0.4;
+    swordGroup.add(blade);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.1), charGoldMat);
+    handle.position.y = -0.05;
+    swordGroup.add(handle);
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.1), charGoldMat);
+    guard.position.y = 0.05;
+    swordGroup.add(guard);
+    swordGroup.position.set(0.65, 1.2, 0.2);
+    swordGroup.rotation.z = -0.3;
+    swordGroup.rotation.x = -0.2;
+    charGroup.add(swordGroup);
+
+    // shield (on back)
+    const shieldMat = new THREE.MeshStandardMaterial({ color: 0x3a5a7a, metalness: 0.6, roughness: 0.3 });
+    const shield = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.08), shieldMat);
+    shield.position.set(-0.3, 1.0, -0.45);
+    shield.castShadow = true;
+    charGroup.add(shield);
+
+    charGroup.position.set(0, 0.1, 0);
+    scene.add(charGroup);
+
+    // ---- idle animation: subtle float & sword sway ----
+    let time = 0;
+
+    // ---- click to move (raycaster) ----
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let targetPos = new THREE.Vector3(0, 0.1, 0);
+    let isMoving = false;
+    const moveSpeed = 0.08;
+    const bounds = 6.5; // limited movement area
+
+    renderer.domElement.addEventListener('click', (event) => {
+      mouse.x = (event.clientX / renderer.domElement.clientWidth) * 2 - 1;
+      mouse.y = -(event.clientY / renderer.domElement.clientHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(floorGroup.children, true);
+      if (intersects.length > 0) {
+        const point = intersects[0].point;
+        let x = Math.min(bounds, Math.max(-bounds, point.x));
+        let z = Math.min(bounds, Math.max(-bounds, point.z));
+        targetPos.set(x, 0.1, z);
+        isMoving = true;
+        document.getElementById('pos-indicator').innerText = 'moving ⚔️';
+      }
+    });
+
+    // ---- camera lazy follow (update target) ----
+    let cameraTargetOffset = new THREE.Vector3(0, 1.5, 0);
+
+    // ---- resize ----
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ---- animation loop ----
+    function animate() {
+      requestAnimationFrame(animate);
+      time += 0.01;
+
+      // move character toward target
+      if (isMoving) {
+        const dx = targetPos.x - charGroup.position.x;
+        const dz = targetPos.z - charGroup.position.z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        if (dist > 0.05) {
+          const step = Math.min(moveSpeed, dist);
+          charGroup.position.x += (dx / dist) * step;
+          charGroup.position.z += (dz / dist) * step;
+          // face movement direction
+          const angle = Math.atan2(dx, dz);
+          charGroup.rotation.y = angle;
+        } else {
+          isMoving = false;
+          document.getElementById('pos-indicator').innerText = 'standing still';
         }
+      }
 
-        // Generate terrain patches
-        const terrainData = [];
-        const halfW = groundWidth / 2 - 1.5;
-        const halfD = groundDepth / 2 - 1.5;
+      // idle sway / breathing
+      const breathe = Math.sin(time * 1.5) * 0.008;
+      charGroup.position.y = 0.1 + breathe * 0.5;
+      // sword sway
+      swordGroup.rotation.z = -0.3 + Math.sin(time * 1.2) * 0.04;
+      swordGroup.rotation.x = -0.2 + Math.cos(time * 0.9) * 0.03;
 
-        for (let x = -halfW; x <= halfW; x += 1.2) {
-            for (let z = -halfD; z <= halfD; z += 1.2) {
-                const dist = Math.sqrt(x * x + z * z);
-                if (dist > halfW * 0.92) continue;
-                // Perlin-ish noise using sin combinations
-                const n1 = Math.sin(x * 0.5 + z * 0.7) * Math.cos(z * 0.4 - x * 0.3);
-                const n2 = Math.sin(x * 1.2 + z * 0.9 + 1.7) * 0.5;
-                const n3 = Math.cos(x * 0.8 - z * 1.1 + 0.5) * 0.3;
-                let height = (n1 * 0.6 + n2 * 0.3 + n3 * 0.1) * 1.2;
-                height = Math.max(0, height + 0.4);
-                height = Math.min(1.8, height);
-
-                // Round to nearest 0.2 for voxel look
-                height = Math.round(height / 0.2) * 0.2;
-                if (height < 0.1) continue;
-
-                let color = colors.darkStone;
-                let emissive = 0x000000;
-                let emissiveIntensity = 0;
-
-                if (height < 0.3) color = colors.dirt;
-                else if (height < 0.6) color = colors.grass;
-                else if (height < 1.0) color = colors.darkGrass;
-                else if (height < 1.4) color = colors.stone;
-                else color = colors.darkStone;
-
-                // Some crystals embedded
-                if (height > 0.8 && Math.random() < 0.04) {
-                    emissive = 0x8844ff;
-                    emissiveIntensity = 0.3;
-                }
-
-                // Slight variation
-                if (Math.random() < 0.15) color = colors.moss;
-
-                const vox = createVoxel(0.9, height, 0.9, color, { x, y: 0, z }, emissive, emissiveIntensity);
-                terrainGroup.add(vox);
-                terrainData.push({ x, z, height, mesh: vox });
-            }
+      // torches flicker
+      scene.children.forEach(child => {
+        if (child.type === 'Group' && child.children.length > 2 && child.children[2] instanceof THREE.PointLight) {
+          const intensity = 0.5 + Math.random() * 0.4;
+          child.children[2].intensity = intensity;
         }
+      });
 
-        // ─── WORLD OBJECTS ───────────────────────────────────────────────
+      // lazy camera follow: smoothly move target toward character
+      const targetVec = new THREE.Vector3(charGroup.position.x, 1.5, charGroup.position.z);
+      controls.target.lerp(targetVec, 0.04);
+      controls.update();
 
-        // Helper: create a tree (voxel style)
-        function createTree(px, pz) {
-            const group = new THREE.Group();
-            const trunkH = 1.2 + Math.random() * 0.8;
-            const trunk = createVoxel(0.5, trunkH, 0.5, 0x3d2817, { x: 0, y: 0, z: 0 });
-            group.add(trunk);
+      renderer.render(scene, camera);
+    }
 
-            const crownSize = 1.4 + Math.random() * 0.4;
-            const crownH = 1.0 + Math.random() * 0.4;
-            const crown = createVoxel(crownSize, crownH, crownSize, 0x1a3a2a, { x: 0, y: trunkH + crownH / 2, z: 0 });
-            crown.material.roughness = 0.9;
-            group.add(crown);
+    animate();
 
-            // Smaller top
-            const top = createVoxel(crownSize * 0.6, crownH * 0.5, crownSize * 0.6, 0x1a4a2a, { x: 0, y: trunkH + crownH +
-                    0.25, z: 0 });
-            top.material.roughness = 0.9;
-            group.add(top);
+    // small particle effect (embers / floating dust)
+    const particleCount = 300;
+    const particleGeo = new THREE.BufferGeometry();
+    const particlePos = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount * 3; i += 3) {
+      const radius = 2 + Math.random() * 7;
+      const angle = Math.random() * Math.PI * 2;
+      const height = Math.random() * 3 + 0.5;
+      particlePos[i] = Math.cos(angle) * radius;
+      particlePos[i+1] = height;
+      particlePos[i+2] = Math.sin(angle) * radius;
+    }
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePos, 3));
+    const particleMat = new THREE.PointsMaterial({
+      color: 0xffaa77,
+      size: 0.06,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+    });
+    const particles = new THREE.Points(particleGeo, particleMat);
+    scene.add(particles);
 
-            // Some branches (small voxels)
-            for (let i = 0; i < 3; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const dist = crownSize * 0.4;
-                const branch = createVoxel(0.3, 0.3, 0.3, 0x2a5a3a, {
-                    x: Math.cos(angle) * dist,
-                    y: trunkH + crownH * 0.4 + Math.random() * 0.3,
-                    z: Math.sin(angle) * dist
-                });
-                branch.material.roughness = 0.9;
-                group.add(branch);
-            }
+    // animate particles
+    setInterval(() => {
+      const pos = particles.geometry.attributes.position.array;
+      for (let i = 0; i < pos.length; i += 3) {
+        pos[i+1] += (Math.random() - 0.5) * 0.02;
+        if (pos[i+1] > 3.5) pos[i+1] = 0.5;
+        if (pos[i+1] < 0.2) pos[i+1] = 3.0;
+      }
+      particles.geometry.attributes.position.needsUpdate = true;
+    }, 150);
 
-            // Slight random rotation
-            group.rotation.y = Math.random() * Math.PI * 2;
-            group.position.set(px, 0, pz);
-            return group;
-        }
-
-        // Helper: create a crystal
-        function createCrystal(px, pz, size = 0.6, color = 0x8844ff) {
-            const group = new THREE.Group();
-            const geo = new THREE.CylinderGeometry(size * 0.1, size * 0.5, size, 6, 1);
-            const mat = new THREE.MeshPhysicalMaterial({
-                color: color,
-                emissive: color,
-                emissiveIntensity: 0.5,
-                metalness: 0.0,
-                roughness: 0.2,
-                transparent: true,
-                opacity: 0.85,
-                clearcoat: 0.3,
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            mesh.position.y = size / 2;
-            mesh.rotation.y = Math.random() * Math.PI;
-            group.add(mesh);
-
-            // Secondary smaller crystal
-            const geo2 = new THREE.CylinderGeometry(size * 0.06, size * 0.3, size * 0.6, 6, 1);
-            const mat2 = mat.clone();
-            mat2.emissiveIntensity = 0.3;
-            const mesh2 = new THREE.Mesh(geo2, mat2);
-            mesh2.position.set(size * 0.4, size * 0.2, size * 0.3);
-            mesh2.rotation.x = 0.3;
-            mesh2.rotation.z = 0.5;
-            group.add(mesh2);
-
-            // Glow point light
-            const glow = new THREE.PointLight(color, 0.4, 4);
-            glow.position.y = size * 0.5;
-            group.add(glow);
-
-            group.position.set(px, 0, pz);
-            return group;
-        }
-
-        // Helper: create a ruined column
-        function createColumn(px, pz, height = 1.8) {
-            const group = new THREE.Group();
-            const segments = Math.ceil(height / 0.4);
-            for (let i = 0; i < segments; i++) {
-                const h = 0.35 + Math.random() * 0.1;
-                const w = 0.5 + Math.random() * 0.1;
-                const d = 0.5 + Math.random() * 0.1;
-                const vox = createVoxel(w, h, d, 0x6a6a7e, { x: 0, y: i * 0.4 + h / 2, z: 0 });
-                vox.material.roughness = 0.9;
-                // Slight offset for ruined look
-                if (i > 2) {
-                    vox.position.x = (Math.random() - 0.5) * 0.15;
-                    vox.position.z = (Math.random() - 0.5) * 0.15;
-                }
-                group.add(vox);
-            }
-            // Top cap
-            const cap = createVoxel(0.7, 0.15, 0.7, 0x7a7a8e, { x: 0, y: height + 0.07, z: 0 });
-            cap.material.roughness = 0.9;
-            group.add(cap);
-
-            group.position.set(px, 0, pz);
-            group.rotation.y = Math.random() * Math.PI * 2;
-            return group;
-        }
-
-        // Place objects in the world
-        const worldObjects = [];
-
-        // Trees
-        for (let i = 0; i < 18; i++) {
-            let attempts = 0;
-            let placed = false;
-            while (!placed && attempts < 30) {
-                const x = (Math.random() - 0.5) * (groundWidth - 4);
-                const z = (Math.random() - 0.5) * (groundDepth - 4);
-                const dist = Math.sqrt(x * x + z * z);
-                // Keep center clear for player
-                if (dist < 3.5) { attempts++; continue; }
-                // Check terrain height
-                let terrainH = 0;
-                for (const td of terrainData) {
-                    if (Math.abs(td.x - x) < 0.8 && Math.abs(td.z - z) < 0.8) {
-                        terrainH = td.height;
-                        break;
-                    }
-                }
-                if (terrainH < 0.3 || terrainH > 0.8) { attempts++; continue; }
-                const tree = createTree(x, z);
-                scene.add(tree);
-                worldObjects.push(tree);
-                placed = true;
-            }
-        }
-
-        // Crystals
-        for (let i = 0; i < 12; i++) {
-            let attempts = 0;
-            let placed = false;
-            while (!placed && attempts < 30) {
-                const x = (Math.random() - 0.5) * (groundWidth - 5);
-                const z = (Math.random() - 0.5) * (groundDepth - 5);
-                const dist = Math.sqrt(x * x + z * z);
-                if (dist < 4) { attempts++; continue; }
-                let terrainH = 0;
-                for (const td of terrainData) {
-                    if (Math.abs(td.x - x) < 0.8 && Math.abs(td.z - z) < 0.8) {
-                        terrainH = td.height;
-                        break;
-                    }
-                }
-                if (terrainH < 0.2 || terrainH > 0.7) { attempts++; continue; }
-                const colors = [0x8844ff, 0x44aaff, 0xff44aa, 0x44ffaa, 0xff8844];
-                const crystal = createCrystal(x, z, 0.4 + Math.random() * 0.5, colors[i % colors.length]);
-                scene.add(crystal);
-                worldObjects.push(crystal);
-                placed = true;
-            }
-        }
-
-        // Ruined columns
-        for (let i = 0; i < 8; i++) {
-            let attempts = 0;
-            let placed = false;
-            while (!placed && attempts < 25) {
-                const x = (Math.random() - 0.5) * (groundWidth - 6);
-                const z = (Math.random() - 0.5) * (groundDepth - 6);
-                const dist = Math.sqrt(x * x + z * z);
-                if (dist < 4.5) { attempts++; continue; }
-                let terrainH = 0;
-                for (const td of terrainData) {
-                    if (Math.abs(td.x - x) < 0.8 && Math.abs(td.z - z) < 0.8) {
-                        terrainH = td.height;
-                        break;
-                    }
-                }
-                if (terrainH < 0.1 || terrainH > 0.5) { attempts++; continue; }
-                const col = createColumn(x, z, 1.2 + Math.random() * 0.8);
-                scene.add(col);
-                worldObjects.push(col);
-                placed = true;
-            }
-        }
-
-        // ─── CHARACTER (voxel-style knight) ─────────────────────────────
-        const character = new THREE.Group();
-
-        function createCharPart(w, h, d, color, pos, emissive = 0x000000, emissiveIntensity = 0) {
-            const geo = new THREE.BoxGeometry(w, h, d);
-            const mat = new THREE.MeshStandardMaterial({
-                color,
-                roughness: 0.6,
-                metalness: 0.2,
-                emissive,
-                emissiveIntensity,
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.copy(pos);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            return mesh;
-        }
-
-        // Body
-        const body = createCharPart(0.8, 1.0, 0.5, 0x3a3a5a, new THREE.Vector3(0, 1.2, 0));
-        character.add(body);
-
-        // Chest plate
-        const chest = createCharPart(0.7, 0.5, 0.35, 0x4a4a6a, new THREE.Vector3(0, 1.5, 0.08));
-        chest.material.metalness = 0.6;
-        chest.material.roughness = 0.3;
-        character.add(chest);
-
-        // Head
-        const head = createCharPart(0.5, 0.5, 0.5, 0x2a2a3a, new THREE.Vector3(0, 2.0, 0));
-        character.add(head);
-
-        // Visor (helmet detail)
-        const visor = createCharPart(0.4, 0.1, 0.1, 0x8a8aaa, new THREE.Vector3(0, 2.0, 0.3));
-        visor.material.metalness = 0.8;
-        visor.material.roughness = 0.2;
-        character.add(visor);
-
-        // Helmet crest
-        const crest = createCharPart(0.08, 0.2, 0.4, 0xaa8844, new THREE.Vector3(0, 2.3, 0));
-        crest.material.metalness = 0.7;
-        character.add(crest);
-
-        // Left arm
-        const lArm = new THREE.Group();
-        const lUpper = createCharPart(0.25, 0.5, 0.25, 0x3a3a5a, new THREE.Vector3(0, 0.25, 0));
-        lArm.add(lUpper);
-        const lLower = createCharPart(0.22, 0.4, 0.22, 0x4a4a6a, new THREE.Vector3(0, -0.2, 0));
-        lLower.material.metalness = 0.5;
-        lArm.add(lLower);
-        lArm.position.set(-0.55, 1.4, 0);
-        character.add(lArm);
-
-        // Right arm
-        const rArm = new THREE.Group();
-        const rUpper = createCharPart(0.25, 0.5, 0.25, 0x3a3a5a, new THREE.Vector3(0, 0.25, 0));
-        rArm.add(rUpper);
-        const rLower = createCharPart(0.22, 0.4, 0.22, 0x4a4a6a, new THREE.Vector3(0, -0.2, 0));
-        rLower.material.metalness = 0.5;
-        rArm.add(rLower);
-        rArm.position.set(0.55, 1.4, 0);
-        character.add(rArm);
-
-        // Sword (in right hand)
-        const swordGroup = new THREE.Group();
-        const blade = createCharPart(0.06, 0.7, 0.02, 0xccccdd, new THREE.Vector3(0, 0.35, 0));
-        blade.material.metalness = 0.9;
-        blade.material.roughness = 0.1;
-        swordGroup.add(blade);
-        const guard = createCharPart(0.2, 0.05, 0.05, 0xaa8844, new THREE.Vector3(0, 0.0, 0));
-        guard.material.metalness = 0.7;
-        swordGroup.add(guard);
-        const handle = createCharPart(0.06, 0.15, 0.06, 0x3d2817, new THREE.Vector3(0, -0.1, 0));
-        swordGroup.add(handle);
-        swordGroup.position.set(0.35, -0.15, 0);
-        swordGroup.rotation.z = -0.2;
-        rArm.add(swordGroup);
-
-        // Left leg
-        const lLeg = new THREE.Group();
-        const lThigh = createCharPart(0.3, 0.4, 0.3, 0x2a2a4a, new THREE.Vector3(0, 0.2, 0));
-        lLeg.add(lThigh);
-        const lCalf = createCharPart(0.28, 0.4, 0.28, 0x3a3a5a, new THREE.Vector3(0, -0.2, 0));
-        lCalf.material.metalness = 0.3;
-        lLeg.add(lCalf);
-        const lBoot = createCharPart(0.3, 0.1, 0.35, 0x1a1a2a, new THREE.Vector3(0, -0.4, 0.05));
-        lLeg.add(lBoot);
-        lLeg.position.set(-0.25, 0.6, 0);
-        character.add(lLeg);
-
-        // Right leg
-        const rLeg = new THREE.Group();
-        const rThigh = createCharPart(0.3, 0.4, 0.3, 0x2a2a4a, new THREE.Vector3(0, 0.2, 0));
-        rLeg.add(rThigh);
-        const rCalf = createCharPart(0.28, 0.4, 0.28, 0x3a3a5a, new THREE.Vector3(0, -0.2, 0));
-        rCalf.material.metalness = 0.3;
-        rLeg.add(rCalf);
-        const rBoot = createCharPart(0.3, 0.1, 0.35, 0x1a1a2a, new THREE.Vector3(0, -0.4, 0.05));
-        rLeg.add(rBoot);
-        rLeg.position.set(0.25, 0.6, 0);
-        character.add(rLeg);
-
-        // Cape (flat voxel-like)
-        const cape = createCharPart(0.5, 0.7, 0.04, 0x5a1a3a, new THREE.Vector3(0, 1.1, -0.3));
-        cape.material.roughness = 0.9;
-        cape.material.emissive = new THREE.Color(0x2a0a1a);
-        cape.material.emissiveIntensity = 0.1;
-        character.add(cape);
-
-        // Shoulder pauldrons
-        const lPaul = createCharPart(0.3, 0.12, 0.3, 0x5a5a7a, new THREE.Vector3(-0.55, 1.65, 0));
-        lPaul.material.metalness = 0.7;
-        lPaul.material.roughness = 0.3;
-        character.add(lPaul);
-        const rPaul = createCharPart(0.3, 0.12, 0.3, 0x5a5a7a, new THREE.Vector3(0.55, 1.65, 0));
-        rPaul.material.metalness = 0.7;
-        rPaul.material.roughness = 0.3;
-        character.add(rPaul);
-
-        // Belt
-        const belt = createCharPart(0.7, 0.08, 0.4, 0x4a3a2a, new THREE.Vector3(0, 0.85, 0));
-        belt.material.metalness = 0.5;
-        character.add(belt);
-
-        character.position.set(0, 0, 0);
-        character.scale.set(0.9, 0.9, 0.9);
-        scene.add(character);
-
-        // ─── CHARACTER STATE ─────────────────────────────────────────────
-        let charTarget = new THREE.Vector3(0, 0, 0);
-        let charVelocity = new THREE.Vector3(0, 0, 0);
-        const charSpeed = 3.2;
-        let isMoving = false;
-        let moveQueue = [];
-        const moveThreshold = 0.15;
-
-        // ─── RAYCASTER ────────────────────────────────────────────────────
-        const raycaster = new THREE.Raycaster();
-        const pointer = new THREE.Vector2();
-        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-        const intersectPoint = new THREE.Vector3();
-
-        // ─── CLICK TO MOVE ──────────────────────────────────────────────
-        renderer.domElement.addEventListener('click', (event) => {
-            const rect = renderer.domElement.getBoundingClientRect();
-            pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-            raycaster.setFromCamera(pointer, camera);
-            const ray = raycaster.ray;
-            const dist = ray.intersectPlane(groundPlane, intersectPoint);
-
-            if (dist) {
-                const target = intersectPoint.clone();
-                // Clamp to world bounds
-                const bound = groundWidth / 2 - 1.2;
-                target.x = Math.max(-bound, Math.min(bound, target.x));
-                target.z = Math.max(-bound, Math.min(bound, target.z));
-                // Find terrain height at target
-                let terrainH = 0;
-                for (const td of terrainData) {
-                    if (Math.abs(td.x - target.x) < 0.6 && Math.abs(td.z - target.z) < 0.6) {
-                        terrainH = td.height;
-                        break;
-                    }
-                }
-                target.y = terrainH;
-                charTarget.copy(target);
-                isMoving = true;
-                // Show crosshair feedback
-                const cross = document.getElementById('crosshair');
-                cross.classList.add('active');
-                setTimeout(() => cross.classList.remove('active'), 200);
-            }
-        });
-
-        // ─── ANIMATION ────────────────────────────────────────────────────
-        let animTime = 0;
-        let walkCycle = 0;
-
-        // ─── PARTICLES ────────────────────────────────────────────────────
-        const particleCount = 300;
-        const particles = new THREE.BufferGeometry();
-        const pPositions = new Float32Array(particleCount * 3);
-        const pSizes = new Float32Array(particleCount);
-        const pSpeeds = new Float32Array(particleCount);
-        const pOffsets = new Float32Array(particleCount);
-
-        for (let i = 0; i < particleCount; i++) {
-            const radius = 6 + Math.random() * 12;
-            const angle = Math.random() * Math.PI * 2;
-            const height = 0.2 + Math.random() * 3.5;
-            pPositions[i * 3] = Math.cos(angle) * radius;
-            pPositions[i * 3 + 1] = height;
-            pPositions[i * 3 + 2] = Math.sin(angle) * radius;
-            pSizes[i] = 0.02 + Math.random() * 0.06;
-            pSpeeds[i] = 0.1 + Math.random() * 0.3;
-            pOffsets[i] = Math.random() * Math.PI * 2;
-        }
-        particles.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
-        particles.setAttribute('size', new THREE.BufferAttribute(pSizes, 1));
-
-        const particleMat = new THREE.ShaderMaterial({
-            uniforms: {
-                uTime: { value: 0 },
-                uColor: { value: new THREE.Color(0x88ccff) },
-            },
-            vertexShader: `
-            attribute float size;
-            uniform float uTime;
-            varying float vAlpha;
-            void main() {
-              vec3 pos = position;
-              float drift = sin(uTime * 0.2 + position.x * 1.3 + position.z * 0.7) * 0.3;
-              pos.y += sin(uTime * 0.5 + position.x * 2.1 + position.z * 1.7) * 0.15;
-              pos.x += cos(uTime * 0.3 + position.z * 1.1) * 0.1;
-              pos.z += sin(uTime * 0.25 + position.x * 0.9) * 0.1;
-              vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
-              gl_PointSize = size * (300.0 / -mvPos.z);
-              gl_Position = projectionMatrix * mvPos;
-              vAlpha = 0.3 + 0.4 * sin(uTime * 0.5 + position.x * 3.0 + position.z * 2.0);
-            }
-          `,
-            fragmentShader: `
-            uniform vec3 uColor;
-            varying float vAlpha;
-            void main() {
-              float d = length(gl_PointCoord - vec2(0.5));
-              if (d > 0.5) discard;
-              float alpha = smoothstep(0.5, 0.0, d) * vAlpha * 0.5;
-              gl_FragColor = vec4(uColor, alpha);
-            }
-          `,
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-        });
-
-        const particleSystem = new THREE.Points(particles, particleMat);
-        scene.add(particleSystem);
-
-        // ─── FIREFLIES (extra particle layer) ────────────────────────────
-        const fireflyCount = 60;
-        const ffGeo = new THREE.BufferGeometry();
-        const ffPos = new Float32Array(fireflyCount * 3);
-        const ffData = [];
-        for (let i = 0; i < fireflyCount; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const r = 2 + Math.random() * 10;
-            ffPos[i * 3] = Math.cos(angle) * r;
-            ffPos[i * 3 + 1] = 0.3 + Math.random() * 2.0;
-            ffPos[i * 3 + 2] = Math.sin(angle) * r;
-            ffData.push({
-                speed: 0.2 + Math.random() * 0.4,
-                phase: Math.random() * Math.PI * 2,
-                radius: r,
-                angle: angle,
-                yBase: 0.3 + Math.random() * 2.0,
-                yAmp: 0.2 + Math.random() * 0.5,
-            });
-        }
-        ffGeo.setAttribute('position', new THREE.BufferAttribute(ffPos, 3));
-
-        const ffMat = new THREE.ShaderMaterial({
-            uniforms: {
-                uTime: { value: 0 },
-                uColor: { value: new THREE.Color(0xffee88) },
-            },
-            vertexShader: `
-            uniform float uTime;
-            varying float vAlpha;
-            void main() {
-              vec3 pos = position;
-              float idx = float(gl_VertexID);
-              float phase = idx * 1.7 + uTime * 0.4;
-              pos.y += sin(phase + pos.x * 0.5) * 0.15;
-              pos.x += cos(phase * 0.7 + pos.z * 0.3) * 0.1;
-              pos.z += sin(phase * 0.5 + pos.x * 0.4) * 0.1;
-              vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
-              gl_PointSize = (8.0 + 4.0 * sin(uTime * 0.5 + idx)) * (80.0 / -mvPos.z);
-              gl_Position = projectionMatrix * mvPos;
-              vAlpha = 0.4 + 0.4 * sin(uTime * 0.6 + idx * 2.3);
-            }
-          `,
-            fragmentShader: `
-            uniform vec3 uColor;
-            varying float vAlpha;
-            void main() {
-              float d = length(gl_PointCoord - vec2(0.5));
-              if (d > 0.5) discard;
-              float glow = exp(-d * 10.0);
-              gl_FragColor = vec4(uColor, glow * vAlpha * 0.7);
-            }
-          `,
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-        });
-
-        const fireflies = new THREE.Points(ffGeo, ffMat);
-        scene.add(fireflies);
-
-        // ─── ATMOSPHERIC FOG RING (subtle) ──────────────────────────────
-        const ringGeo = new THREE.RingGeometry(8, 12, 64);
-        const ringMat = new THREE.ShaderMaterial({
-            uniforms: {
-                uTime: { value: 0 },
-            },
-            vertexShader: `
-            varying vec2 vUv;
-            void main() {
-              vUv = uv;
-              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-          `,
-            fragmentShader: `
-            uniform float uTime;
-            varying vec2 vUv;
-            void main() {
-              float d = distance(vUv, vec2(0.5));
-              float alpha = 0.03 * (1.0 - d * 2.0) * (0.8 + 0.2 * sin(uTime * 0.1 + vUv.x * 10.0));
-              alpha = max(0.0, alpha);
-              gl_FragColor = vec4(0.3, 0.2, 0.5, alpha);
-            }
-          `,
-            transparent: true,
-            depthWrite: false,
-            side: THREE.DoubleSide,
-            blending: THREE.AdditiveBlending,
-        });
-        const fogRing = new THREE.Mesh(ringGeo, ringMat);
-        fogRing.rotation.x = -Math.PI / 2;
-        fogRing.position.y = 0.05;
-        scene.add(fogRing);
-
-        // ─── RESIZE ──────────────────────────────────────────────────────
-        window.addEventListener('resize', () => {
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            camera.aspect = w / h;
-            camera.updateProjectionMatrix();
-            renderer.setSize(w, h);
-        });
-
-        // ─── GAME LOOP ────────────────────────────────────────────────────
-        const clock = new THREE.Clock();
-
-        function animate() {
-            const delta = Math.min(clock.getDelta(), 0.05);
-            const time = clock.elapsedTime;
-
-            // Update uniforms
-            rippleMat.uniforms.uTime.value = time;
-            particleMat.uniforms.uTime.value = time;
-            ffMat.uniforms.uTime.value = time;
-            ringMat.uniforms.uTime.value = time;
-
-            // ── Move character ──
-            const charPos = character.position;
-            const targetPos = charTarget;
-
-            if (isMoving) {
-                const dx = targetPos.x - charPos.x;
-                const dz = targetPos.z - charPos.z;
-                const dist = Math.sqrt(dx * dx + dz * dz);
-
-                if (dist < moveThreshold) {
-                    isMoving = false;
-                    charPos.x = targetPos.x;
-                    charPos.z = targetPos.z;
-                    charVelocity.set(0, 0, 0);
-                } else {
-                    const speed = charSpeed * delta;
-                    const step = Math.min(speed, dist);
-                    charPos.x += (dx / dist) * step;
-                    charPos.z += (dz / dist) * step;
-                    // Terrain following
-                    let terrainH = 0;
-                    for (const td of terrainData) {
-                        if (Math.abs(td.x - charPos.x) < 0.6 && Math.abs(td.z - charPos.z) < 0.6) {
-                            terrainH = td.height;
-                            break;
-                        }
-                    }
-                    charPos.y = terrainH;
-                    // Face movement direction
-                    const targetAngle = Math.atan2(dx, dz);
-                    let currentAngle = character.rotation.y;
-                    let diff = targetAngle - currentAngle;
-                    while (diff > Math.PI) diff -= Math.PI * 2;
-                    while (diff < -Math.PI) diff += Math.PI * 2;
-                    character.rotation.y += diff * Math.min(1, delta * 8);
-                }
-            }
-
-            // ── Animation ──
-            animTime += delta;
-            if (isMoving) {
-                walkCycle += delta * 6;
-                const swing = Math.sin(walkCycle);
-                const swing2 = Math.sin(walkCycle + Math.PI);
-                // Arms
-                lArm.rotation.x = swing * 0.5;
-                rArm.rotation.x = swing2 * 0.5;
-                // Legs
-                lLeg.rotation.x = -swing * 0.4;
-                rLeg.rotation.x = -swing2 * 0.4;
-                // Body bob
-                character.position.y += Math.sin(walkCycle * 2) * delta * 0.15;
-                // Cape sway
-                cape.rotation.x = Math.sin(walkCycle * 0.5) * 0.06;
-                cape.position.z = -0.3 + Math.sin(walkCycle * 0.7) * 0.02;
-            } else {
-                // Idle sway
-                const idleSway = Math.sin(animTime * 1.2) * 0.02;
-                const idleSway2 = Math.sin(animTime * 1.5 + 0.5) * 0.02;
-                lArm.rotation.x = idleSway;
-                rArm.rotation.x = -idleSway;
-                lLeg.rotation.x = idleSway2 * 0.3;
-                rLeg.rotation.x = -idleSway2 * 0.3;
-                // Cape gentle sway
-                cape.rotation.x = Math.sin(animTime * 0.8) * 0.03;
-                cape.position.z = -0.3 + Math.sin(animTime * 0.5) * 0.01;
-                // Slight body bob
-                character.position.y += Math.sin(animTime * 1.0) * delta * 0.02;
-            }
-
-            // ── Fireflies update ──
-            const ffPosAttr = fireflies.geometry.attributes.position;
-            const ffArray = ffPosAttr.array;
-            for (let i = 0; i < fireflyCount; i++) {
-                const d = ffData[i];
-                const angle = d.angle + time * d.speed * 0.05;
-                const r = d.radius + Math.sin(time * d.speed + d.phase) * 0.3;
-                ffArray[i * 3] = Math.cos(angle) * r;
-                ffArray[i * 3 + 1] = d.yBase + Math.sin(time * d.speed + d.phase) * d.yAmp;
-                ffArray[i * 3 + 2] = Math.sin(angle) * r;
-            }
-            ffPosAttr.needsUpdate = true;
-
-            // ── Camera lazy follow ──
-            const targetCamPos = new THREE.Vector3(
-                character.position.x + 12,
-                10 + character.position.y,
-                character.position.z + 14
-            );
-            // Only update if character has moved significantly
-            const camDist = camera.position.distanceTo(targetCamPos);
-            if (camDist > 0.5 || isMoving) {
-                // Use lerp for smooth follow
-                const lerpFactor = 1 - Math.exp(-delta * 1.8);
-                camera.position.lerp(targetCamPos, lerpFactor);
-                const targetLook = new THREE.Vector3(
-                    character.position.x,
-                    character.position.y + 1.2,
-                    character.position.z
-                );
-                controls.target.lerp(targetLook, lerpFactor * 0.8);
-                controls.update();
-            }
-
-            // ── Render ──
-            renderer.render(scene, camera);
-            requestAnimationFrame(animate);
-        }
-
-        animate();
-
-        // ─── HANDLE FOCUS / BLUR ─────────────────────────────────────────
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                clock.stop();
-            } else {
-                clock.start();
-            }
-        });
-
-        // ─── SMALL PERFORMANCE TWEAK ─────────────────────────────────────
-        // Reduce shadow map update frequency for better perf
-        renderer.shadowMap.autoUpdate = true;
-
-        console.log('✦ Voxel Fantasy Demo loaded ✦');
-        console.log('Click to move • Drag to orbit • Scroll to zoom');
-    </script>
+    console.log('✨ Voxel Fantasy · Wet Floor');
+  </script>
 </body>
 </html>

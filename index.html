@@ -1,446 +1,987 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Voxel Isometric Wet Floor</title>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    #info {
-      position: absolute;
-      bottom: 20px;
-      left: 20px;
-      color: #bbbbbb;
-      background: rgba(10, 10, 10, 0.6);
-      padding: 8px 15px;
-      border-radius: 20px;
-      backdrop-filter: blur(5px);
-      pointer-events: none;
-      font-size: 14px;
-      letter-spacing: 1px;
-      text-shadow: 0 0 8px rgba(0,0,0,0.5);
-    }
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voxel Fantasy — Isometric Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            overflow: hidden;
+            background: #0a0a12;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #info {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 13px;
+            letter-spacing: 0.5px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 18px;
+            border-radius: 20px;
+            backdrop-filter: blur(4px);
+            pointer-events: none;
+            user-select: none;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            font-weight: 300;
+        }
+        #info span {
+            color: rgba(255, 200, 150, 0.6);
+        }
+    </style>
 </head>
 <body>
-  <div id="info">✨ CLICK TO MOVE · DRAG TO ROTATE · SCROLL TO ZOOM ✨</div>
+    <div id="info">🖱️ click to move &nbsp;·&nbsp; drag to orbit &nbsp;·&nbsp; scroll to zoom</div>
 
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
-      }
-    }
-  </script>
-
-  <script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-
-    // ---------- INITIALIZATION ----------
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a14);
-    scene.fog = new THREE.FogExp2(0x0a0a14, 0.015);
-
-    // Camera: perspective with isometric feel (like a high angle)
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(12, 14, 18);
-    camera.lookAt(0, 0, 0);
-
-    // Renderers
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
-    document.body.appendChild(renderer.domElement);
-
-    // Controls: custom lazy-follow, drag to rotate, scroll to zoom
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.rotateSpeed = 0.8;
-    controls.zoomSpeed = 1.2;
-    controls.enablePan = false;
-    controls.minDistance = 8;
-    controls.maxDistance = 30;
-    controls.maxPolarAngle = Math.PI / 2.4; // limit angle to avoid going under floor
-    controls.target.set(0, 1.5, 0);
-    controls.update();
-
-    // ---------- LIGHTING ----------
-    // Ambient base
-    const ambientLight = new THREE.AmbientLight(0x404066);
-    scene.add(ambientLight);
-
-    // Main directional light (sun/moon)
-    const sunLight = new THREE.DirectionalLight(0xffeedd, 1.5);
-    sunLight.position.set(10, 20, 8);
-    sunLight.castShadow = true;
-    sunLight.receiveShadow = true;
-    sunLight.shadow.mapSize.width = 1024;
-    sunLight.shadow.mapSize.height = 1024;
-    sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 60;
-    sunLight.shadow.camera.left = -25;
-    sunLight.shadow.camera.right = 25;
-    sunLight.shadow.camera.top = 25;
-    sunLight.shadow.camera.bottom = -25;
-    sunLight.shadow.bias = -0.0005;
-    scene.add(sunLight);
-
-    // Fill light with cool tone
-    const fillLight = new THREE.DirectionalLight(0xaaccff, 0.8);
-    fillLight.position.set(-10, 5, -10);
-    scene.add(fillLight);
-
-    // Point lights for magical accent
-    const pointLight1 = new THREE.PointLight(0xff5500, 1.2, 15);
-    pointLight1.position.set(4, 2.5, 3);
-    scene.add(pointLight1);
-    const pointLight2 = new THREE.PointLight(0x33aaff, 1.0, 15);
-    pointLight2.position.set(-4, 2.0, -3);
-    scene.add(pointLight2);
-
-    // ---------- REFLECTIVE WET FLOOR ----------
-    // Large glossy plane using MeshStandardMaterial with high metalness and low roughness + environment-ish specular
-    const floorGeometry = new THREE.PlaneGeometry(45, 45);
-    const floorMaterial = new THREE.MeshStandardMaterial({
-      color: 0x1a1f2e,
-      roughness: 0.15,
-      metalness: 0.85,
-      emissive: new THREE.Color(0x03060a),
-      emissiveIntensity: 0.2,
-      envMapIntensity: 1.0,
-    });
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -0.01;
-    floor.receiveShadow = true;
-    scene.add(floor);
-
-    // Additional glossy reflection via simple mirror-like plane? We'll add a second semi-transparent reflective layer for wetness
-    const wetLayerGeometry = new THREE.PlaneGeometry(45, 45);
-    const wetLayerMaterial = new THREE.MeshStandardMaterial({
-      color: 0x334455,
-      roughness: 0.05,
-      metalness: 1.0,
-      transparent: true,
-      opacity: 0.35,
-      envMapIntensity: 1.5,
-    });
-    const wetLayer = new THREE.Mesh(wetLayerGeometry, wetLayerMaterial);
-    wetLayer.rotation.x = -Math.PI / 2;
-    wetLayer.position.y = 0.005;
-    wetLayer.receiveShadow = true;
-    scene.add(wetLayer);
-
-    // Some wet streak decals using thin planes with roughness
-    for (let i = 0; i < 30; i++) {
-      const streakGeo = new THREE.PlaneGeometry(0.8 + Math.random() * 2.5, 0.1 + Math.random() * 0.6);
-      const streakMat = new THREE.MeshStandardMaterial({
-        color: 0xaaccff,
-        roughness: 0.02,
-        metalness: 0.9,
-        transparent: true,
-        opacity: 0.15 + Math.random() * 0.2,
-        emissive: new THREE.Color(0x112233),
-        emissiveIntensity: 0.3,
-      });
-      const streak = new THREE.Mesh(streakGeo, streakMat);
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 5 + Math.random() * 15;
-      streak.rotation.z = Math.random() * Math.PI;
-      streak.rotation.x = -Math.PI / 2;
-      streak.rotation.y = angle;
-      streak.position.set(Math.cos(angle) * radius, 0.01, Math.sin(angle) * radius);
-      streak.receiveShadow = false;
-      scene.add(streak);
-    }
-
-    // ---------- VOXEL WORLD BUILDING ----------
-    function createVoxelBlock(color, x, y, z, size = 0.5, roughness = 0.4, metalness = 0.2, emissive = 0x000000) {
-      const geometry = new THREE.BoxGeometry(size, size, size);
-      const material = new THREE.MeshStandardMaterial({ color, roughness, metalness, emissive, emissiveIntensity: emissive !== 0x000000 ? 0.8 : 0 });
-      const block = new THREE.Mesh(geometry, material);
-      block.position.set(x, y, z);
-      block.castShadow = true;
-      block.receiveShadow = true;
-      return block;
-    }
-
-    // Terrain patches: floating islands, ruined pillars, mystical crystals
-    function buildEnvironment() {
-      // Central raised area
-      const basePlatform = createVoxelBlock(0x3a3f4f, 0, 0, 0, 2.0, 0.5, 0.3);
-      basePlatform.scale.set(2.5, 0.3, 2.5);
-      basePlatform.position.y = -0.35;
-      scene.add(basePlatform);
-
-      // Voxel ruins around
-      const ruinPositions = [
-        {x: -5, z: -2}, {x: 6, z: -4}, {x: -4, z: 5}, {x: 5, z: 6}, {x: 0, z: -7}, {x: -7, z: 0}
-      ];
-      ruinPositions.forEach((pos, index) => {
-        const pillarGroup = new THREE.Group();
-        const stoneColor = index % 2 === 0 ? 0x6b5a4a : 0x7d6e5d;
-        const height = 1.0 + Math.random() * 1.8;
-        for (let i = 0; i < 5; i++) {
-          const block = createVoxelBlock(stoneColor, 0, i * 0.5 + 0.25, 0, 0.5, 0.7, 0.1);
-          pillarGroup.add(block);
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
         }
-        pillarGroup.position.set(pos.x, 0.5, pos.z);
-        pillarGroup.rotation.y = Math.random() * Math.PI;
-        scene.add(pillarGroup);
+    </script>
 
-        // Broken pieces
-        for (let j = 0; j < 3; j++) {
-          const piece = createVoxelBlock(0x5a4a3a, pos.x + (Math.random()-0.5)*1.5, 0.2 + Math.random()*0.5, pos.z + (Math.random()-0.5)*1.5, 0.3, 0.6, 0.2);
-          scene.add(piece);
-        }
-      });
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
-      // Glowing crystals
-      const crystalColors = [0xff44aa, 0x66ccff, 0x88ff88, 0xffaa44];
-      for (let k = 0; k < 12; k++) {
-        const angle = Math.random() * Math.PI * 2;
-        const radius = 4 + Math.random() * 9;
-        const x = Math.cos(angle) * radius;
-        const z = Math.sin(angle) * radius;
-        const crystalGroup = new THREE.Group();
-        const crystalColor = crystalColors[Math.floor(Math.random() * crystalColors.length)];
-        const crystalHeight = 0.8 + Math.random() * 1.8;
-        for (let h = 0; h < crystalHeight; h += 0.5) {
-          const crystal = createVoxelBlock(crystalColor, 0, h + 0.25, 0, 0.4, 0.1, 0.5, crystalColor);
-          crystal.scale.set(0.8, 1, 0.8);
-          crystalGroup.add(crystal);
-        }
-        crystalGroup.position.set(x, 0.2, z);
-        crystalGroup.rotation.y = Math.random() * Math.PI;
-        scene.add(crystalGroup);
-      }
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  1.  RENDERER  /  SCENE  /  CAMERA
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-      // Floating mystical orbs (small spheres with glow)
-      for (let f = 0; f < 8; f++) {
-        const orbGeo = new THREE.SphereGeometry(0.2, 8, 8);
-        const orbMat = new THREE.MeshStandardMaterial({
-          color: 0xffaa33,
-          emissive: 0xff5500,
-          emissiveIntensity: 1.5,
-          roughness: 0.2,
-          metalness: 0.1
+        const renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            powerPreference: 'high-performance',
         });
-        const orb = new THREE.Mesh(orbGeo, orbMat);
-        orb.position.set((Math.random()-0.5)*12, 2.0 + Math.random()*3, (Math.random()-0.5)*12);
-        orb.castShadow = true;
-        orb.receiveShadow = false;
-        scene.add(orb);
-      }
-    }
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        document.body.prepend(renderer.domElement);
 
-    buildEnvironment();
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a18);
+        scene.fog = new THREE.FogExp2(0x0a0a18, 0.009);
 
-    // ---------- CHARACTER ----------
-    const characterGroup = new THREE.Group();
-    // body
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.8, 0.8, 0.5),
-      new THREE.MeshStandardMaterial({ color: 0x3d4a5c, roughness: 0.5, metalness: 0.4 })
-    );
-    body.position.y = 0.7;
-    body.castShadow = true;
-    body.receiveShadow = true;
-    characterGroup.add(body);
-    // head
-    const head = new THREE.Mesh(
-      new THREE.BoxGeometry(0.5, 0.5, 0.5),
-      new THREE.MeshStandardMaterial({ color: 0xd4b896, roughness: 0.6, metalness: 0.1 })
-    );
-    head.position.y = 1.25;
-    head.castShadow = true;
-    head.receiveShadow = true;
-    characterGroup.add(head);
-    // helmet / headpiece
-    const helm = new THREE.Mesh(
-      new THREE.BoxGeometry(0.55, 0.3, 0.55),
-      new THREE.MeshStandardMaterial({ color: 0x2a2e3a, roughness: 0.3, metalness: 0.8 })
-    );
-    helm.position.y = 1.5;
-    helm.castShadow = true;
-    helm.receiveShadow = true;
-    characterGroup.add(helm);
-    // weapon (sword on back)
-    const swordBlade = new THREE.Mesh(
-      new THREE.BoxGeometry(0.1, 0.8, 0.1),
-      new THREE.MeshStandardMaterial({ color: 0xccccdd, roughness: 0.2, metalness: 1.0 })
-    );
-    swordBlade.position.set(-0.4, 0.9, -0.5);
-    swordBlade.castShadow = true;
-    characterGroup.add(swordBlade);
-    const swordHandle = new THREE.Mesh(
-      new THREE.BoxGeometry(0.15, 0.2, 0.15),
-      new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.7 })
-    );
-    swordHandle.position.set(-0.4, 0.5, -0.5);
-    swordHandle.castShadow = true;
-    characterGroup.add(swordHandle);
-    // base
-    const baseRing = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.6, 0.6, 0.1, 8),
-      new THREE.MeshStandardMaterial({ color: 0x111116, roughness: 0.1, metalness: 0.9 })
-    );
-    baseRing.position.y = 0.1;
-    baseRing.receiveShadow = true;
-    characterGroup.add(baseRing);
-    characterGroup.position.set(0, 0.2, 0);
-    scene.add(characterGroup);
+        const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.2, 100);
+        camera.position.set(20, 16, 20);
 
-    // Movement target indicator (ring)
-    const targetIndicator = new THREE.Mesh(
-      new THREE.RingGeometry(0.4, 0.55, 32),
-      new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
-    );
-    targetIndicator.rotation.x = -Math.PI / 2;
-    targetIndicator.position.y = 0.05;
-    targetIndicator.visible = false;
-    scene.add(targetIndicator);
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  2.  POST-PROCESSING  (Bloom for glow)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    // ---------- ENVIRONMENTAL ANIMATIONS (subtle) ----------
-    const floatingOrbs = [];
-    scene.traverse((child) => {
-      if (child.isMesh && child.geometry.type === 'SphereGeometry' && child.material.emissive) {
-        floatingOrbs.push({ mesh: child, baseY: child.position.y, speed: 0.5 + Math.random() * 1.2, offset: Math.random() * Math.PI * 2 });
-      }
-    });
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
 
-    // Crystal pulse
-    const crystals = [];
-    scene.traverse((child) => {
-      if (child.isMesh && child.material.emissive && child.material.emissive.getHex() !== 0x000000 && child.geometry.type === 'BoxGeometry' && child.scale.x < 0.5) {
-        crystals.push({ mesh: child, baseIntensity: child.material.emissiveIntensity, phase: Math.random() * Math.PI * 2 });
-      }
-    });
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            0.25, 0.4, 0.2
+        );
+        composer.addPass(bloomPass);
 
-    // Time for animations
-    let clock = new THREE.Clock();
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  3.  ENVIRONMENT MAP  (for reflections)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    // ---------- CLICK TO MOVE (with limited area) ----------
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    const moveTarget = new THREE.Vector3();
-    const characterTarget = new THREE.Vector3();
-    let isMoving = false;
-    const moveSpeed = 4.0;
-    const maxMoveRadius = 6.5; // limited space
+        function generateEnvMap() {
+            const pmrem = new THREE.PMREMGenerator(renderer);
+            pmrem.compileCubemapShader();
 
-    window.addEventListener('click', (event) => {
-      if (event.target !== renderer.domElement) return;
-      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-      raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObject(floor);
-      if (intersects.length > 0) {
-        const point = intersects[0].point;
-        // Clamp to radius
-        const clampedX = Math.max(-maxMoveRadius, Math.min(maxMoveRadius, point.x));
-        const clampedZ = Math.max(-maxMoveRadius, Math.min(maxMoveRadius, point.z));
-        const target = new THREE.Vector3(clampedX, 0.2, clampedZ);
-        moveTarget.copy(target);
-        characterTarget.copy(target);
-        isMoving = true;
-        targetIndicator.position.set(clampedX, 0.1, clampedZ);
-        targetIndicator.visible = true;
-      }
-    });
+            const envScene = new THREE.Scene();
+            envScene.background = new THREE.Color(0x141425);
 
-    // Character walking bob
-    let walkPhase = 0;
+            const hemi = new THREE.HemisphereLight(0x4466aa, 0x221133, 0.8);
+            envScene.add(hemi);
 
-    // ---------- CAMERA LAZY FOLLOW ----------
-    controls.target = characterGroup.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+            const dir = new THREE.DirectionalLight(0xffcc88, 0.6);
+            dir.position.set(5, 10, 7);
+            envScene.add(dir);
 
-    // ---------- ANIMATION LOOP ----------
-    function animate() {
-      const delta = Math.min(clock.getDelta(), 0.1);
-      const elapsedTime = performance.now() * 0.001;
+            const dir2 = new THREE.DirectionalLight(0x4488ff, 0.3);
+            dir2.position.set(-5, 3, -7);
+            envScene.add(dir2);
 
-      // Character movement
-      if (isMoving) {
-        const currentPos = characterGroup.position.clone();
-        currentPos.y = 0.2; // keep y constant
-        const targetPos = new THREE.Vector3(moveTarget.x, 0.2, moveTarget.z);
-        const distance = currentPos.distanceTo(targetPos);
-        if (distance > 0.1) {
-          const direction = targetPos.clone().sub(currentPos).normalize();
-          const step = moveSpeed * delta;
-          const newPos = currentPos.clone().add(direction.multiplyScalar(step));
-          // Clamp
-          newPos.x = Math.max(-maxMoveRadius, Math.min(maxMoveRadius, newPos.x));
-          newPos.z = Math.max(-maxMoveRadius, Math.min(maxMoveRadius, newPos.z));
-          characterGroup.position.x = newPos.x;
-          characterGroup.position.z = newPos.z;
-          // Bobbing
-          walkPhase += delta * 10;
-          characterGroup.position.y = 0.2 + Math.abs(Math.sin(walkPhase)) * 0.1;
-        } else {
-          characterGroup.position.x = moveTarget.x;
-          characterGroup.position.z = moveTarget.z;
-          characterGroup.position.y = 0.2;
-          isMoving = false;
-          targetIndicator.visible = false;
+            const envMap = pmrem.fromScene(envScene, 0, 0.1, 100).texture;
+            pmrem.dispose();
+            return envMap;
         }
-      } else {
-        // Idle breathing
-        characterGroup.position.y = 0.2 + Math.sin(elapsedTime * 3) * 0.02;
-      }
 
-      // Lazy follow camera target
-      const desiredTarget = characterGroup.position.clone().add(new THREE.Vector3(0, 1.5, 0));
-      controls.target.lerp(desiredTarget, 1.5 * delta);
-      controls.update();
+        const envMap = generateEnvMap();
+        scene.environment = envMap;
 
-      // Animate floating orbs
-      floatingOrbs.forEach((orb) => {
-        orb.mesh.position.y = orb.baseY + Math.sin(elapsedTime * orb.speed + orb.offset) * 0.8;
-        orb.mesh.rotation.y += 0.01;
-      });
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  4.  LIGHTING
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-      // Pulse crystals
-      crystals.forEach((crystal) => {
-        if (crystal.mesh.material.emissiveIntensity) {
-          crystal.mesh.material.emissiveIntensity = crystal.baseIntensity + Math.sin(elapsedTime * 4 + crystal.phase) * 0.7;
+        const ambient = new THREE.AmbientLight(0x223355, 0.4);
+        scene.add(ambient);
+
+        const mainLight = new THREE.DirectionalLight(0xffd4a0, 1.8);
+        mainLight.position.set(14, 22, 10);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
+        mainLight.shadow.camera.near = 0.5;
+        mainLight.shadow.camera.far = 50;
+        mainLight.shadow.camera.left = -25;
+        mainLight.shadow.camera.right = 25;
+        mainLight.shadow.camera.top = 25;
+        mainLight.shadow.camera.bottom = -25;
+        mainLight.shadow.bias = -0.001;
+        mainLight.shadow.normalBias = 0.02;
+        scene.add(mainLight);
+
+        const fillLight = new THREE.DirectionalLight(0x4488ff, 0.5);
+        fillLight.position.set(-10, 8, -12);
+        scene.add(fillLight);
+
+        const rimLight = new THREE.DirectionalLight(0xff8844, 0.3);
+        rimLight.position.set(-5, 2, 15);
+        scene.add(rimLight);
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  5.  GROUND  (wet reflective)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const groundSize = 40;
+        const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize, 80, 80);
+        // subtle height variation for puddles
+        const pos = groundGeo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const y = pos.getY(i);
+            const dist = Math.sqrt(x * x + y * y);
+            const ripple = Math.sin(x * 0.3) * Math.cos(y * 0.4) * 0.06;
+            const falloff = Math.max(0, 1 - dist / 22);
+            pos.setZ(i, ripple + falloff * 0.1);
         }
-      });
+        groundGeo.computeVertexNormals();
 
-      // Slight point light movement
-      pointLight1.position.x = 4 + Math.sin(elapsedTime * 1.3) * 2;
-      pointLight1.position.z = 3 + Math.cos(elapsedTime * 1.1) * 2;
-      pointLight2.position.x = -4 + Math.sin(elapsedTime * 1.8) * 2.5;
-      pointLight2.position.z = -3 + Math.cos(elapsedTime * 1.5) * 2;
+        const groundMat = new THREE.MeshPhysicalMaterial({
+            color: new THREE.Color(0x1a1a2e),
+            roughness: 0.06,
+            metalness: 0.15,
+            envMap: envMap,
+            envMapIntensity: 2.2,
+            clearcoat: 0.3,
+            clearcoatRoughness: 0.25,
+            reflectivity: 1.0,
+            side: THREE.DoubleSide,
+        });
 
-      renderer.render(scene, camera);
-      requestAnimationFrame(animate);
-    }
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.05;
+        ground.receiveShadow = true;
+        scene.add(ground);
 
-    animate();
+        // subtle grid lines for depth
+        const gridHelper = new THREE.GridHelper(groundSize, 30, 0x3a3a6a, 0x2a2a4a);
+        gridHelper.position.y = 0.01;
+        gridHelper.material.transparent = true;
+        gridHelper.material.opacity = 0.15;
+        scene.add(gridHelper);
 
-    // Window resize
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  6.  VOXEL STRUCTURES  (ruins / fantasy)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    console.log('Voxel dream loop activated. Click to move, drag to rotate, scroll to zoom.');
-  </script>
+        function voxelBox(w, h, d, color, rough = 0.7, metal = 0.1, emissive = null, emissiveIntensity = 0) {
+            const geo = new THREE.BoxGeometry(w, h, d);
+            const mat = new THREE.MeshStandardMaterial({
+                color,
+                roughness: rough,
+                metalness: metal,
+                envMap: envMap,
+                envMapIntensity: 0.6,
+                emissive: emissive || new THREE.Color(0x000000),
+                emissiveIntensity: emissiveIntensity,
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            return mesh;
+        }
+
+        function addEdges(mesh, color = 0x2a2a4a, thresholdAngle = 15) {
+            const edges = new THREE.EdgesGeometry(mesh.geometry, thresholdAngle);
+            const lineMat = new THREE.LineBasicMaterial({
+                color,
+                transparent: true,
+                opacity: 0.25,
+            });
+            const line = new THREE.LineSegments(edges, lineMat);
+            mesh.add(line);
+            return mesh;
+        }
+
+        // ─── Column helper ───
+        function createColumn(x, z, h = 3.2, color = 0x3a3a5a) {
+            const group = new THREE.Group();
+            const base = voxelBox(0.8, 0.3, 0.8, 0x2a2a3a, 0.8);
+            base.position.y = 0.15;
+            group.add(base);
+
+            const shaft = voxelBox(0.6, h, 0.6, color, 0.75, 0.05);
+            shaft.position.y = 0.3 + h / 2;
+            shaft.castShadow = true;
+            addEdges(shaft, 0x4a4a7a);
+            group.add(shaft);
+
+            const capital = voxelBox(0.9, 0.25, 0.9, 0x4a4a6a, 0.7, 0.1);
+            capital.position.y = 0.3 + h + 0.125;
+            group.add(capital);
+
+            const glow = voxelBox(0.3, 0.08, 0.3, 0x6688ff, 0.1, 0.0, 0x6688ff, 0.2);
+            glow.position.y = 0.3 + h + 0.25;
+            group.add(glow);
+
+            group.position.set(x, 0, z);
+            return group;
+        }
+
+        // ─── Arch helper ───
+        function createArch(x, z, rotY = 0) {
+            const group = new THREE.Group();
+            const stoneColor = 0x4a4a5a;
+
+            // left pillar
+            const p1 = voxelBox(0.4, 2.8, 0.4, stoneColor, 0.8);
+            p1.position.set(-1.0, 1.4, 0);
+            addEdges(p1, 0x5a5a7a);
+            group.add(p1);
+
+            // right pillar
+            const p2 = voxelBox(0.4, 2.8, 0.4, stoneColor, 0.8);
+            p2.position.set(1.0, 1.4, 0);
+            addEdges(p2, 0x5a5a7a);
+            group.add(p2);
+
+            // arch top
+            for (let i = -2; i <= 2; i++) {
+                const w = 0.35;
+                const angle = (i / 2) * Math.PI * 0.5;
+                const xOff = Math.sin(angle) * 1.0;
+                const yOff = 2.8 + Math.cos(angle) * 0.6 - 0.3;
+                const brick = voxelBox(w, 0.25, 0.5, 0x5a5a6a, 0.8);
+                brick.position.set(xOff, yOff, 0);
+                brick.rotation.z = angle * 0.3;
+                addEdges(brick, 0x6a6a8a);
+                group.add(brick);
+            }
+
+            // keystone
+            const key = voxelBox(0.4, 0.4, 0.5, 0x6a6a8a, 0.7, 0.1);
+            key.position.set(0, 3.4, 0);
+            addEdges(key, 0x8a8aaa);
+            group.add(key);
+
+            group.position.set(x, 0, z);
+            group.rotation.y = rotY;
+            return group;
+        }
+
+        // ─── Wall piece ───
+        function createWall(x, z, w, h, rotY = 0, color = 0x3a3a4a) {
+            const g = new THREE.Group();
+            const block = voxelBox(w, h, 0.3, color, 0.8);
+            block.position.y = h / 2;
+            addEdges(block, 0x4a4a6a);
+            g.add(block);
+
+            // top cap
+            const cap = voxelBox(w + 0.1, 0.12, 0.4, 0x4a4a5a, 0.7);
+            cap.position.y = h + 0.06;
+            g.add(cap);
+
+            g.position.set(x, 0, z);
+            g.rotation.y = rotY;
+            return g;
+        }
+
+        // ─── Place structures ───
+
+        // Main columns around the area
+        const columnPositions = [
+            [-6, -5],
+            [-5, 6],
+            [6, -5],
+            [7, 7],
+            [-8, 2],
+            [8, -2],
+            [-3, -8],
+            [4, 9],
+            [-9, -7],
+            [10, 5]
+        ];
+        for (const [x, z] of columnPositions) {
+            const h = 2.5 + Math.random() * 1.8;
+            const col = createColumn(x, z, h, 0x3a3a5a);
+            scene.add(col);
+        }
+
+        // Arches
+        scene.add(createArch(-3, -6, 0.2));
+        scene.add(createArch(4, 5, -0.5));
+        scene.add(createArch(-6, 4, 0.8));
+        scene.add(createArch(7, -4, -0.3));
+
+        // Walls forming a partial enclosure
+        scene.add(createWall(-2, -4, 3.5, 1.2, 0.0, 0x3a3a4a));
+        scene.add(createWall(2, -4, 3.5, 1.2, 0.0, 0x3a3a4a));
+        scene.add(createWall(-1, -5.5, 2.0, 1.8, 0.0, 0x4a4a5a));
+        scene.add(createWall(1, -5.5, 2.0, 1.8, 0.0, 0x4a4a5a));
+        scene.add(createWall(-4, -2, 0.3, 2.0, 0.5, 0x3a3a4a));
+        scene.add(createWall(4, -2, 0.3, 2.0, -0.5, 0x3a3a4a));
+
+        // Raised platform (dais)
+        const daisGroup = new THREE.Group();
+        for (let i = 0; i < 3; i++) {
+            const size = 3.0 - i * 0.6;
+            const step = voxelBox(size, 0.25, size, 0x2a2a3a, 0.7, 0.05);
+            step.position.y = 0.125 + i * 0.25;
+            addEdges(step, 0x4a4a6a);
+            daisGroup.add(step);
+        }
+        daisGroup.position.set(0, 0, 3.5);
+        scene.add(daisGroup);
+
+        // ─── Torches with fire ───
+        function createTorch(x, z) {
+            const g = new THREE.Group();
+
+            // Pole
+            const pole = voxelBox(0.08, 1.6, 0.08, 0x2a2a2a, 0.9, 0.3);
+            pole.position.y = 0.8;
+            g.add(pole);
+
+            // Brazier
+            const brazier = voxelBox(0.25, 0.15, 0.25, 0x4a4a3a, 0.6, 0.5);
+            brazier.position.y = 1.6;
+            g.add(brazier);
+
+            // Glow orb
+            const glow = voxelBox(0.12, 0.12, 0.12, 0xff8833, 0.1, 0.0, 0xff6633, 1.5);
+            glow.position.y = 1.75;
+            g.add(glow);
+
+            g.position.set(x, 0, z);
+
+            // Fire particles (attached to scene directly for animation)
+            const fireParticles = createFireParticles(x, 1.7, z);
+            scene.add(fireParticles);
+
+            return g;
+        }
+
+        function createFireParticles(x, y, z) {
+            const count = 40;
+            const geo = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const sizes = new Float32Array(count);
+            const speeds = new Float32Array(count);
+            const offsets = new Float32Array(count);
+
+            for (let i = 0; i < count; i++) {
+                const radius = 0.08 + Math.random() * 0.2;
+                const angle = Math.random() * Math.PI * 2;
+                const heightOffset = Math.random() * 0.6;
+                positions[i * 3] = Math.cos(angle) * radius;
+                positions[i * 3 + 1] = heightOffset;
+                positions[i * 3 + 2] = Math.sin(angle) * radius;
+                sizes[i] = 0.04 + Math.random() * 0.06;
+                speeds[i] = 0.5 + Math.random() * 1.5;
+                offsets[i] = Math.random() * Math.PI * 2;
+            }
+
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            const mat = new THREE.PointsMaterial({
+                color: 0xff6633,
+                size: 0.08,
+                transparent: true,
+                opacity: 0.7,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                sizeAttenuation: true,
+            });
+
+            const points = new THREE.Points(geo, mat);
+            points.position.set(x, y, z);
+            points.userData = { speeds, offsets, baseY: y };
+            return points;
+        }
+
+        const torchPositions = [
+            [-5, -3],
+            [5, -3],
+            [-4, 7],
+            [6, 6],
+            [-7, -6],
+            [0, -7]
+        ];
+        for (const [x, z] of torchPositions) {
+            scene.add(createTorch(x, z));
+        }
+
+        // ─── Floating magical particles ───
+        function createMagicParticles() {
+            const count = 200;
+            const geo = new THREE.BufferGeometry();
+            const pos = new Float32Array(count * 3);
+            const sizes = new Float32Array(count);
+            const data = [];
+
+            for (let i = 0; i < count; i++) {
+                const radius = 3 + Math.random() * 12;
+                const angle = Math.random() * Math.PI * 2;
+                const height = 0.5 + Math.random() * 5;
+                pos[i * 3] = Math.cos(angle) * radius;
+                pos[i * 3 + 1] = height;
+                pos[i * 3 + 2] = Math.sin(angle) * radius;
+                sizes[i] = 0.02 + Math.random() * 0.06;
+                data.push({
+                    angle: angle,
+                    radius: radius,
+                    height: height,
+                    speed: 0.1 + Math.random() * 0.3,
+                    phase: Math.random() * Math.PI * 2,
+                    floatSpeed: 0.2 + Math.random() * 0.4,
+                });
+            }
+
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            geo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            const mat = new THREE.PointsMaterial({
+                color: 0x6688ff,
+                size: 0.08,
+                transparent: true,
+                opacity: 0.5,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                sizeAttenuation: true,
+            });
+
+            const points = new THREE.Points(geo, mat);
+            points.userData = { data };
+            return points;
+        }
+
+        const magicParticles = createMagicParticles();
+        scene.add(magicParticles);
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  7.  CHARACTER
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const character = new THREE.Group();
+
+        // Body (torso)
+        const torso = voxelBox(0.5, 0.6, 0.32, 0x2a2a3a, 0.4, 0.3);
+        torso.position.y = 1.0;
+        torso.castShadow = true;
+        addEdges(torso, 0x5a5a7a);
+        character.add(torso);
+
+        // Chest plate
+        const chest = voxelBox(0.42, 0.25, 0.15, 0x3a3a5a, 0.3, 0.4);
+        chest.position.set(0, 1.1, 0.18);
+        character.add(chest);
+
+        // Head
+        const head = voxelBox(0.3, 0.3, 0.3, 0x2a2a3a, 0.3, 0.2);
+        head.position.y = 1.45;
+        head.castShadow = true;
+        addEdges(head, 0x6a6a8a);
+        character.add(head);
+
+        // Helmet visor
+        const visor = voxelBox(0.25, 0.06, 0.04, 0x6688ff, 0.1, 0.8, 0x6688ff, 0.15);
+        visor.position.set(0, 1.48, 0.16);
+        character.add(visor);
+
+        // Left arm
+        const lArm = voxelBox(0.1, 0.5, 0.1, 0x2a2a3a, 0.4, 0.2);
+        lArm.position.set(-0.33, 0.95, 0);
+        lArm.castShadow = true;
+        addEdges(lArm, 0x5a5a7a);
+        character.add(lArm);
+
+        // Left hand
+        const lHand = voxelBox(0.1, 0.1, 0.1, 0x3a3a4a, 0.5, 0.1);
+        lHand.position.set(-0.33, 0.7, 0);
+        character.add(lHand);
+
+        // Right arm
+        const rArm = voxelBox(0.1, 0.5, 0.1, 0x2a2a3a, 0.4, 0.2);
+        rArm.position.set(0.33, 0.95, 0);
+        rArm.castShadow = true;
+        addEdges(rArm, 0x5a5a7a);
+        character.add(rArm);
+
+        // Right hand
+        const rHand = voxelBox(0.1, 0.1, 0.1, 0x3a3a4a, 0.5, 0.1);
+        rHand.position.set(0.33, 0.7, 0);
+        character.add(rHand);
+
+        // Left leg
+        const lLeg = voxelBox(0.14, 0.45, 0.14, 0x1a1a2a, 0.5, 0.1);
+        lLeg.position.set(-0.14, 0.42, 0);
+        lLeg.castShadow = true;
+        addEdges(lLeg, 0x4a4a6a);
+        character.add(lLeg);
+
+        // Right leg
+        const rLeg = voxelBox(0.14, 0.45, 0.14, 0x1a1a2a, 0.5, 0.1);
+        rLeg.position.set(0.14, 0.42, 0);
+        rLeg.castShadow = true;
+        addEdges(rLeg, 0x4a4a6a);
+        character.add(rLeg);
+
+        // Cape (back)
+        const cape = voxelBox(0.4, 0.35, 0.04, 0x4a1a1a, 0.7, 0.0);
+        cape.position.set(0, 0.85, -0.2);
+        character.add(cape);
+
+        // Cape bottom
+        const cape2 = voxelBox(0.35, 0.15, 0.04, 0x3a1a1a, 0.8, 0.0);
+        cape2.position.set(0, 0.6, -0.22);
+        character.add(cape2);
+
+        // Shoulder pauldrons
+        const lPaul = voxelBox(0.16, 0.06, 0.2, 0x3a3a5a, 0.3, 0.4);
+        lPaul.position.set(-0.32, 1.25, 0);
+        character.add(lPaul);
+
+        const rPaul = voxelBox(0.16, 0.06, 0.2, 0x3a3a5a, 0.3, 0.4);
+        rPaul.position.set(0.32, 1.25, 0);
+        character.add(rPaul);
+
+        // Weapon (staff/sword) - a simple blade
+        const weapon = new THREE.Group();
+        const handle = voxelBox(0.04, 0.3, 0.04, 0x2a1a0a, 0.4, 0.5);
+        handle.position.y = 0.15;
+        weapon.add(handle);
+
+        const blade = voxelBox(0.03, 0.4, 0.06, 0x8899cc, 0.1, 0.9, 0x6688ff, 0.05);
+        blade.position.y = 0.4;
+        weapon.add(blade);
+
+        const guard = voxelBox(0.12, 0.04, 0.04, 0x4a3a2a, 0.4, 0.3);
+        guard.position.y = 0.3;
+        weapon.add(guard);
+
+        weapon.position.set(0.35, 0.9, 0.1);
+        weapon.rotation.z = -0.15;
+        character.add(weapon);
+
+        character.position.set(0, 0, 0);
+        scene.add(character);
+
+        // Store parts for animation
+        const charParts = {
+            group: character,
+            lArm,
+            rArm,
+            lLeg,
+            rLeg,
+            torso,
+            head,
+            cape,
+            cape2,
+            weapon,
+        };
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  8.  CHARACTER STATE  &  MOVEMENT
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const MOVE_RADIUS = 14;
+        const moveTarget = new THREE.Vector3(0, 0, 0);
+        const currentPos = new THREE.Vector3(0, 0, 0);
+        let isMoving = false;
+        let moveProgress = 1;
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  9.  CAMERA CONTROLS
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const cameraState = {
+            theta: 0.6,
+            phi: 0.58,
+            distance: 18,
+            target: new THREE.Vector3(0, 0.8, 0),
+            currentTheta: 0.6,
+            currentPhi: 0.58,
+            currentDistance: 18,
+        };
+
+        const MIN_DIST = 6;
+        const MAX_DIST = 32;
+        const PHI_MIN = 0.2;
+        const PHI_MAX = 1.0;
+
+        function updateCamera() {
+            const { theta, phi, distance, target } = cameraState;
+
+            // Smooth interpolation
+            cameraState.currentTheta += (theta - cameraState.currentTheta) * 0.06;
+            cameraState.currentPhi += (phi - cameraState.currentPhi) * 0.06;
+            cameraState.currentDistance += (distance - cameraState.currentDistance) * 0.06;
+
+            const t = cameraState.currentTheta;
+            const p = cameraState.currentPhi;
+            const d = cameraState.currentDistance;
+
+            const x = target.x + d * Math.sin(t) * Math.cos(p);
+            const y = target.y + d * Math.sin(p);
+            const z = target.z + d * Math.cos(t) * Math.cos(p);
+
+            camera.position.lerp(new THREE.Vector3(x, y, z), 0.12);
+            camera.lookAt(target);
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  10. MOUSE / TOUCH INPUT
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const mouse = {
+            down: false,
+            startX: 0,
+            startY: 0,
+            startTheta: 0,
+            startPhi: 0,
+            moved: false,
+            button: -1,
+        };
+
+        const raycaster = new THREE.Raycaster();
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+        function getGroundIntersection(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+            const intersect = new THREE.Vector3();
+            const ray = raycaster.ray;
+            const denom = ray.direction.dot(groundPlane.normal);
+            if (Math.abs(denom) < 0.001) return null;
+            const t = -(ray.origin.dot(groundPlane.normal) + groundPlane.constant) / denom;
+            if (t < 0) return null;
+            intersect.copy(ray.origin).add(ray.direction.clone().multiplyScalar(t));
+            return intersect;
+        }
+
+        // Mouse events
+        renderer.domElement.addEventListener('mousedown', (e) => {
+            mouse.down = true;
+            mouse.startX = e.clientX;
+            mouse.startY = e.clientY;
+            mouse.startTheta = cameraState.theta;
+            mouse.startPhi = cameraState.phi;
+            mouse.moved = false;
+            mouse.button = e.button;
+        });
+
+        renderer.domElement.addEventListener('mousemove', (e) => {
+            if (!mouse.down) return;
+            const dx = e.clientX - mouse.startX;
+            const dy = e.clientY - mouse.startY;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                mouse.moved = true;
+                if (mouse.button === 0 || mouse.button === 2) {
+                    cameraState.theta = mouse.startTheta - dx * 0.008;
+                    cameraState.phi = Math.max(PHI_MIN, Math.min(PHI_MAX,
+                        mouse.startPhi + dy * 0.008
+                    ));
+                }
+            }
+        });
+
+        renderer.domElement.addEventListener('mouseup', (e) => {
+            if (mouse.down && !mouse.moved && e.button === 0) {
+                // Click to move
+                const pt = getGroundIntersection(e);
+                if (pt) {
+                    const dist = Math.sqrt(pt.x * pt.x + pt.z * pt.z);
+                    if (dist <= MOVE_RADIUS) {
+                        moveTarget.copy(pt);
+                        moveTarget.y = 0;
+                        isMoving = true;
+                        moveProgress = 0;
+                    } else {
+                        // Clamp to radius
+                        const angle = Math.atan2(pt.z, pt.x);
+                        const clamped = MOVE_RADIUS * 0.95;
+                        moveTarget.set(Math.cos(angle) * clamped, 0, Math.sin(angle) * clamped);
+                        isMoving = true;
+                        moveProgress = 0;
+                    }
+                }
+            }
+            mouse.down = false;
+            mouse.moved = false;
+        });
+
+        renderer.domElement.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            cameraState.distance = Math.max(MIN_DIST, Math.min(MAX_DIST,
+                cameraState.distance + e.deltaY * 0.02
+            ));
+        }, { passive: false });
+
+        // Right click drag
+        renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Touch support
+        let touchStartX = 0,
+            touchStartY = 0;
+        let touchStartTheta = 0,
+            touchStartPhi = 0;
+        let touchMoved = false;
+        let touchId = null;
+
+        renderer.domElement.addEventListener('touchstart', (e) => {
+            const touch = e.changedTouches[0];
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            touchStartTheta = cameraState.theta;
+            touchStartPhi = cameraState.phi;
+            touchMoved = false;
+            touchId = touch.identifier;
+        }, { passive: true });
+
+        renderer.domElement.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.changedTouches[0];
+            if (touch.identifier !== touchId) return;
+            const dx = touch.clientX - touchStartX;
+            const dy = touch.clientY - touchStartY;
+            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                touchMoved = true;
+                cameraState.theta = touchStartTheta - dx * 0.008;
+                cameraState.phi = Math.max(PHI_MIN, Math.min(PHI_MAX,
+                    touchStartPhi + dy * 0.008
+                ));
+            }
+        }, { passive: false });
+
+        renderer.domElement.addEventListener('touchend', (e) => {
+            if (!touchMoved && e.changedTouches.length > 0) {
+                const touch = e.changedTouches[0];
+                const rect = renderer.domElement.getBoundingClientRect();
+                const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+                raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+                const pt = new THREE.Vector3();
+                const ray = raycaster.ray;
+                const denom = ray.direction.dot(groundPlane.normal);
+                if (Math.abs(denom) > 0.001) {
+                    const t = -(ray.origin.dot(groundPlane.normal) + groundPlane.constant) / denom;
+                    if (t > 0) {
+                        pt.copy(ray.origin).add(ray.direction.clone().multiplyScalar(t));
+                        const dist = Math.sqrt(pt.x * pt.x + pt.z * pt.z);
+                        if (dist <= MOVE_RADIUS) {
+                            moveTarget.copy(pt);
+                            moveTarget.y = 0;
+                            isMoving = true;
+                            moveProgress = 0;
+                        } else {
+                            const angle = Math.atan2(pt.z, pt.x);
+                            const clamped = MOVE_RADIUS * 0.95;
+                            moveTarget.set(Math.cos(angle) * clamped, 0, Math.sin(angle) * clamped);
+                            isMoving = true;
+                            moveProgress = 0;
+                        }
+                    }
+                }
+            }
+            touchMoved = false;
+            touchId = null;
+        }, { passive: true });
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  11. ANIMATION LOOP
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        const clock = new THREE.Clock();
+        let elapsed = 0;
+
+        function animate() {
+            const delta = Math.min(clock.getDelta(), 0.05);
+            elapsed += delta;
+
+            // ── Character movement ──
+            const speed = 3.5;
+            if (isMoving) {
+                moveProgress += delta * speed;
+                if (moveProgress >= 1) {
+                    moveProgress = 1;
+                    isMoving = false;
+                }
+                const t = moveProgress;
+                // Ease in-out
+                const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                currentPos.lerpVectors(
+                    new THREE.Vector3(character.position.x, 0, character.position.z),
+                    moveTarget,
+                    eased
+                );
+                character.position.x = currentPos.x;
+                character.position.z = currentPos.z;
+
+                // Face movement direction
+                const dx = moveTarget.x - character.position.x;
+                const dz = moveTarget.z - character.position.z;
+                if (Math.abs(dx) > 0.01 || Math.abs(dz) > 0.01) {
+                    const targetAngle = Math.atan2(dx, dz);
+                    let currentAngle = character.rotation.y;
+                    let diff = targetAngle - currentAngle;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    character.rotation.y += diff * 0.08;
+                }
+            }
+
+            // ── Character animation ──
+            const walkCycle = isMoving ? Math.sin(elapsed * 7) : 0;
+            const walkCycle2 = isMoving ? Math.sin(elapsed * 7 + 0.5) : 0;
+            const bob = isMoving ? Math.abs(Math.sin(elapsed * 7)) * 0.04 : 0;
+
+            // Arms swing
+            charParts.lArm.rotation.x = walkCycle * 0.4;
+            charParts.rArm.rotation.x = -walkCycle * 0.4;
+            // Legs swing
+            charParts.lLeg.rotation.x = -walkCycle2 * 0.35;
+            charParts.rLeg.rotation.x = walkCycle2 * 0.35;
+
+            // Body bob
+            charParts.torso.position.y = 1.0 + bob * 0.5;
+            charParts.head.position.y = 1.45 + bob * 0.5;
+
+            // Cape sway
+            const capeSway = Math.sin(elapsed * 0.8) * 0.02 + (isMoving ? Math.sin(elapsed * 5) * 0.03 : 0);
+            charParts.cape.rotation.x = -0.05 + capeSway;
+            charParts.cape2.rotation.x = -0.08 + capeSway * 1.2;
+
+            // Idle breathing (subtle)
+            if (!isMoving) {
+                const breath = Math.sin(elapsed * 0.6) * 0.005;
+                charParts.torso.position.y += breath;
+                charParts.head.position.y += breath * 0.6;
+                charParts.torso.scale.x = 1 + Math.sin(elapsed * 0.6) * 0.002;
+                charParts.torso.scale.z = 1 - Math.sin(elapsed * 0.6) * 0.002;
+            }
+
+            // Weapon sway
+            charParts.weapon.rotation.z = -0.15 + walkCycle * 0.05;
+            charParts.weapon.rotation.x = walkCycle * 0.03;
+
+            // ── Update camera target ──
+            cameraState.target.lerp(
+                new THREE.Vector3(character.position.x, 0.8, character.position.z),
+                0.06
+            );
+
+            // ── Update fire particles ──
+            scene.children.forEach((child) => {
+                if (child.isPoints && child.userData.speeds) {
+                    const positions = child.geometry.attributes.position.array;
+                    const { speeds, offsets, baseY } = child.userData;
+                    const time = elapsed;
+                    for (let i = 0; i < positions.length / 3; i++) {
+                        const i3 = i * 3;
+                        const speed = speeds[i];
+                        const offset = offsets[i];
+                        const angle = time * speed + offset;
+                        const radius = 0.06 + Math.sin(time * 1.3 + i) * 0.04;
+                        const heightOffset = Math.sin(time * 2.1 + i * 1.7) * 0.15 + 0.1;
+                        positions[i3] = Math.cos(angle) * radius;
+                        positions[i3 + 1] = heightOffset + Math.sin(time * 1.7 + i * 0.9) * 0.05;
+                        positions[i3 + 2] = Math.sin(angle) * radius;
+                    }
+                    child.geometry.attributes.position.needsUpdate = true;
+                    child.material.opacity = 0.4 + Math.sin(time * 0.5 + child.id) * 0.2;
+                }
+            });
+
+            // ── Update magic particles ──
+            if (magicParticles.userData.data) {
+                const positions = magicParticles.geometry.attributes.position.array;
+                const data = magicParticles.userData.data;
+                for (let i = 0; i < data.length; i++) {
+                    const d = data[i];
+                    const angle = d.angle + elapsed * d.speed * 0.15;
+                    const radius = d.radius + Math.sin(elapsed * 0.2 + d.phase) * 0.5;
+                    const height = d.height + Math.sin(elapsed * d.floatSpeed + d.phase) * 0.4;
+                    positions[i * 3] = Math.cos(angle) * radius;
+                    positions[i * 3 + 1] = height;
+                    positions[i * 3 + 2] = Math.sin(angle) * radius;
+                }
+                magicParticles.geometry.attributes.position.needsUpdate = true;
+                magicParticles.material.opacity = 0.3 + Math.sin(elapsed * 0.2) * 0.15;
+            }
+
+            // ── Ground shimmer (subtle env map rotation) ──
+            // We'll just rotate the env map slightly over time
+            // Not easily done without re-generating, so we'll skip
+
+            // ── Update camera ──
+            updateCamera();
+
+            // ── Render ──
+            composer.render();
+
+            requestAnimationFrame(animate);
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  12. RESIZE
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        window.addEventListener('resize', () => {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+            composer.setSize(w, h);
+        });
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        //  13. START
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        // Initial camera
+        cameraState.target.set(0, 0.8, 0);
+        cameraState.currentTheta = cameraState.theta;
+        cameraState.currentPhi = cameraState.phi;
+        cameraState.currentDistance = cameraState.distance;
+        updateCamera();
+
+        animate();
+
+        console.log('✦ Voxel Fantasy Demo — Click to move, drag to orbit, scroll to zoom');
+    </script>
 </body>
 </html>

@@ -3,49 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Voxel Echoes — Reflective Isometric Fantasy</title>
+  <title>Voxel Isometric Wet Floor</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #0a0a12; font-family: 'Segoe UI', system-ui, sans-serif; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
     #info {
       position: absolute;
-      bottom: 18px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(10, 10, 20, 0.75);
-      backdrop-filter: blur(8px);
-      color: #dcc8a0;
-      padding: 10px 22px;
-      border-radius: 40px;
-      letter-spacing: 1px;
+      bottom: 20px;
+      left: 20px;
+      color: #bbbbbb;
+      background: rgba(10, 10, 10, 0.6);
+      padding: 8px 15px;
+      border-radius: 20px;
+      backdrop-filter: blur(5px);
+      pointer-events: none;
       font-size: 14px;
-      pointer-events: none;
-      border: 1px solid rgba(220, 200, 160, 0.3);
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-      z-index: 10;
-    }
-    #title {
-      position: absolute;
-      top: 20px;
-      left: 30px;
-      color: #efe6d2;
-      font-weight: 300;
-      text-shadow: 0 4px 12px rgba(0,0,0,0.6);
-      pointer-events: none;
-      font-size: 22px;
-      letter-spacing: 3px;
-      z-index: 10;
-    }
-    #title span {
-      color: #b89a6a;
-      font-weight: 600;
+      letter-spacing: 1px;
+      text-shadow: 0 0 8px rgba(0,0,0,0.5);
     }
   </style>
 </head>
 <body>
-  <div id="title">⚔️ VOXEL<span>ECHOES</span></div>
-  <div id="info">CLICK GROUND TO MOVE • DRAG TO ROTATE • SCROLL TO ZOOM</div>
+  <div id="info">✨ CLICK TO MOVE · DRAG TO ROTATE · SCROLL TO ZOOM ✨</div>
 
-  <!-- Import Three.js core and addons from CDN -->
   <script type="importmap">
     {
       "imports": {
@@ -58,356 +41,406 @@
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { Reflector } from 'three/addons/objects/Reflector.js';
+    import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
-    // --- SCENE SETUP ---
+    // ---------- INITIALIZATION ----------
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0a14);
-    scene.fog = new THREE.FogExp2(0x0a0a14, 0.035);
+    scene.fog = new THREE.FogExp2(0x0a0a14, 0.015);
 
-    // Renderer with performance settings
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    // Camera: perspective with isometric feel (like a high angle)
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(12, 14, 18);
+    camera.lookAt(0, 0, 0);
+
+    // Renderers
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
     renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
     document.body.appendChild(renderer.domElement);
 
-    // --- CAMERA (Isometric-ish, orbital for lazy follow) ---
-    const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 200);
-    camera.position.set(15, 18, 18); // elevated isometric view
-
-    // --- ORBIT CONTROLS (drag to rotate, scroll to zoom) ---
+    // Controls: custom lazy-follow, drag to rotate, scroll to zoom
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0, 1.5, 0);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
+    controls.dampingFactor = 0.05;
+    controls.rotateSpeed = 0.8;
+    controls.zoomSpeed = 1.2;
+    controls.enablePan = false;
     controls.minDistance = 8;
-    controls.maxDistance = 28;
-    controls.maxPolarAngle = Math.PI / 2.4; // keep above ground
-    controls.minPolarAngle = 0.3;
-    controls.autoRotate = false;
+    controls.maxDistance = 30;
+    controls.maxPolarAngle = Math.PI / 2.4; // limit angle to avoid going under floor
+    controls.target.set(0, 1.5, 0);
     controls.update();
 
-    // --- LIGHTS (moody, elden ring vibes) ---
-    const ambientLight = new THREE.AmbientLight(0x3a2f3f, 0.9);
+    // ---------- LIGHTING ----------
+    // Ambient base
+    const ambientLight = new THREE.AmbientLight(0x404066);
     scene.add(ambientLight);
 
-    const mainLight = new THREE.DirectionalLight(0xe8d5b8, 1.2);
-    mainLight.position.set(12, 20, 8);
-    mainLight.castShadow = true;
-    mainLight.receiveShadow = true;
-    mainLight.shadow.mapSize.width = 1024;
-    mainLight.shadow.mapSize.height = 1024;
-    mainLight.shadow.camera.near = 0.5;
-    mainLight.shadow.camera.far = 60;
-    mainLight.shadow.camera.left = -20;
-    mainLight.shadow.camera.right = 20;
-    mainLight.shadow.camera.top = 20;
-    mainLight.shadow.camera.bottom = -20;
-    mainLight.shadow.bias = -0.0005;
-    scene.add(mainLight);
+    // Main directional light (sun/moon)
+    const sunLight = new THREE.DirectionalLight(0xffeedd, 1.5);
+    sunLight.position.set(10, 20, 8);
+    sunLight.castShadow = true;
+    sunLight.receiveShadow = true;
+    sunLight.shadow.mapSize.width = 1024;
+    sunLight.shadow.mapSize.height = 1024;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 60;
+    sunLight.shadow.camera.left = -25;
+    sunLight.shadow.camera.right = 25;
+    sunLight.shadow.camera.top = 25;
+    sunLight.shadow.camera.bottom = -25;
+    sunLight.shadow.bias = -0.0005;
+    scene.add(sunLight);
 
-    const rimLight = new THREE.PointLight(0x7a5c9e, 1.0, 30);
-    rimLight.position.set(-6, 8, -8);
-    scene.add(rimLight);
-
-    const fillLight = new THREE.PointLight(0x4a6a8a, 0.7, 25);
-    fillLight.position.set(5, 6, 10);
+    // Fill light with cool tone
+    const fillLight = new THREE.DirectionalLight(0xaaccff, 0.8);
+    fillLight.position.set(-10, 5, -10);
     scene.add(fillLight);
 
-    // --- REFLECTIVE WET FLOOR (Reflector) ---
-    const floorWidth = 45;
-    const floorDepth = 45;
-    const reflectorFloor = new Reflector(
-      new THREE.PlaneGeometry(floorWidth, floorDepth),
-      {
-        clipBias: 0.003,
-        textureWidth: window.innerWidth * 0.6,
-        textureHeight: window.innerHeight * 0.6,
-        color: 0xaab0c0,
-        recursive: true
-      }
-    );
-    reflectorFloor.rotation.x = -Math.PI / 2;
-    reflectorFloor.position.y = 0.01;
-    reflectorFloor.receiveShadow = true;
-    scene.add(reflectorFloor);
+    // Point lights for magical accent
+    const pointLight1 = new THREE.PointLight(0xff5500, 1.2, 15);
+    pointLight1.position.set(4, 2.5, 3);
+    scene.add(pointLight1);
+    const pointLight2 = new THREE.PointLight(0x33aaff, 1.0, 15);
+    pointLight2.position.set(-4, 2.0, -3);
+    scene.add(pointLight2);
 
-    // subtle grid / texture overlay on floor to fake voxel grid
-    const gridHelper = new THREE.GridHelper(floorWidth, 30, 0x887766, 0x443a33);
-    gridHelper.position.y = 0.02;
-    gridHelper.material.transparent = true;
-    gridHelper.material.opacity = 0.18;
-    scene.add(gridHelper);
-
-    // --- VOXEL STYLE ENVIRONMENT (built from boxes) ---
-    const voxelGroup = new THREE.Group();
-    scene.add(voxelGroup);
-
-    function addVoxel(x, y, z, w, h, d, color, roughness = 0.7, metalness = 0.1) {
-      const geometry = new THREE.BoxGeometry(w, h, d);
-      const material = new THREE.MeshStandardMaterial({
-        color: color,
-        roughness: roughness,
-        metalness: metalness,
-        emissive: new THREE.Color(0x000000)
-      });
-      const cube = new THREE.Mesh(geometry, material);
-      cube.position.set(x, y + h/2, z);
-      cube.castShadow = true;
-      cube.receiveShadow = true;
-      voxelGroup.add(cube);
-      return cube;
-    }
-
-    // --- Ancient ruins and terrain features ---
-    // Central dais
-    addVoxel(0, 0, 0, 5, 0.6, 5, 0x5a4e42);
-    addVoxel(0, 0.6, 0, 4, 0.3, 4, 0x6b5f53);
-    
-    // Fallen pillars
-    addVoxel(-4, 0.5, -4, 1.2, 3.5, 1.2, 0x7a6a5a, 0.5, 0.2);
-    addVoxel(-4, 4.0, -4, 1.5, 0.8, 1.5, 0x8a7a6a, 0.4, 0.1);
-    addVoxel(5.5, 0.5, -3, 1.0, 4.5, 1.0, 0x6e5e4e, 0.6, 0.2);
-    addVoxel(5.5, 5.0, -3, 1.4, 0.7, 1.4, 0x807060, 0.5, 0.1);
-    
-    // Broken archway pieces
-    addVoxel(-2.5, 0.5, -6, 1.5, 2.8, 1.5, 0x65584c);
-    addVoxel(3, 0.8, -5.5, 1.8, 3.0, 1.2, 0x5c4f42);
-    addVoxel(0.2, 0.4, -7, 2.2, 1.5, 1.0, 0x776854);
-    
-    // Rune stones and small crystals (glowing)
-    const crystalMat = new THREE.MeshStandardMaterial({ color: 0x9a8ae0, emissive: 0x3a2a6a, roughness: 0.2, metalness: 0.3 });
-    const crystalGeo = new THREE.BoxGeometry(0.6, 1.6, 0.6);
-    const crystalPositions = [
-      [2.5, 0.8, 2.8], [-3.2, 0.9, -2.5], [4.0, 0.7, -4.0], [-1.5, 0.9, 5.0]
-    ];
-    crystalPositions.forEach(pos => {
-      const crystal = new THREE.Mesh(crystalGeo, crystalMat);
-      crystal.position.set(pos[0], pos[1], pos[2]);
-      crystal.castShadow = true;
-      crystal.receiveShadow = true;
-      voxelGroup.add(crystal);
+    // ---------- REFLECTIVE WET FLOOR ----------
+    // Large glossy plane using MeshStandardMaterial with high metalness and low roughness + environment-ish specular
+    const floorGeometry = new THREE.PlaneGeometry(45, 45);
+    const floorMaterial = new THREE.MeshStandardMaterial({
+      color: 0x1a1f2e,
+      roughness: 0.15,
+      metalness: 0.85,
+      emissive: new THREE.Color(0x03060a),
+      emissiveIntensity: 0.2,
+      envMapIntensity: 1.0,
     });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.01;
+    floor.receiveShadow = true;
+    scene.add(floor);
 
-    // Mossy boulders (voxel blobs)
-    addVoxel(-5, 0.3, 3, 2.2, 1.8, 2.2, 0x4a5a3a);
-    addVoxel(7, 0.4, 4, 1.8, 2.0, 2.5, 0x3f4f32);
-    addVoxel(6, 0.2, -5.5, 2.0, 1.5, 1.5, 0x556b2f);
-    
-    // Giant tree-like voxel structure (fantasy beacon)
-    addVoxel(-7, 0, -7, 2.0, 6.0, 2.0, 0x4e3c2a);
-    addVoxel(-7, 6, -7, 4.0, 1.2, 4.0, 0x3c2f1e);
-    addVoxel(-7, 7.2, -7, 2.8, 1.0, 2.8, 0x5a4530);
-    
-    // Floating glowing orbs (environment life)
-    const orbGroup = new THREE.Group();
-    scene.add(orbGroup);
-    const orbMat = new THREE.MeshStandardMaterial({ color: 0xffbb77, emissive: 0x553311, roughness: 0.1, metalness: 0.5 });
-    for (let i = 0; i < 12; i++) {
-      const orbGeo = new THREE.SphereGeometry(0.15 + Math.random()*0.2, 6, 6);
-      const orb = new THREE.Mesh(orbGeo, orbMat);
-      orb.castShadow = true;
-      orb.position.set(
-        (Math.random() - 0.5) * 16,
-        1.5 + Math.random() * 5,
-        (Math.random() - 0.5) * 16
-      );
-      orb.userData = { baseY: orb.position.y, speed: 0.5 + Math.random() * 1.5, offset: Math.random() * 10 };
-      orbGroup.add(orb);
+    // Additional glossy reflection via simple mirror-like plane? We'll add a second semi-transparent reflective layer for wetness
+    const wetLayerGeometry = new THREE.PlaneGeometry(45, 45);
+    const wetLayerMaterial = new THREE.MeshStandardMaterial({
+      color: 0x334455,
+      roughness: 0.05,
+      metalness: 1.0,
+      transparent: true,
+      opacity: 0.35,
+      envMapIntensity: 1.5,
+    });
+    const wetLayer = new THREE.Mesh(wetLayerGeometry, wetLayerMaterial);
+    wetLayer.rotation.x = -Math.PI / 2;
+    wetLayer.position.y = 0.005;
+    wetLayer.receiveShadow = true;
+    scene.add(wetLayer);
+
+    // Some wet streak decals using thin planes with roughness
+    for (let i = 0; i < 30; i++) {
+      const streakGeo = new THREE.PlaneGeometry(0.8 + Math.random() * 2.5, 0.1 + Math.random() * 0.6);
+      const streakMat = new THREE.MeshStandardMaterial({
+        color: 0xaaccff,
+        roughness: 0.02,
+        metalness: 0.9,
+        transparent: true,
+        opacity: 0.15 + Math.random() * 0.2,
+        emissive: new THREE.Color(0x112233),
+        emissiveIntensity: 0.3,
+      });
+      const streak = new THREE.Mesh(streakGeo, streakMat);
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 5 + Math.random() * 15;
+      streak.rotation.z = Math.random() * Math.PI;
+      streak.rotation.x = -Math.PI / 2;
+      streak.rotation.y = angle;
+      streak.position.set(Math.cos(angle) * radius, 0.01, Math.sin(angle) * radius);
+      streak.receiveShadow = false;
+      scene.add(streak);
     }
 
-    // --- CHARACTER (voxel knight-ish) ---
+    // ---------- VOXEL WORLD BUILDING ----------
+    function createVoxelBlock(color, x, y, z, size = 0.5, roughness = 0.4, metalness = 0.2, emissive = 0x000000) {
+      const geometry = new THREE.BoxGeometry(size, size, size);
+      const material = new THREE.MeshStandardMaterial({ color, roughness, metalness, emissive, emissiveIntensity: emissive !== 0x000000 ? 0.8 : 0 });
+      const block = new THREE.Mesh(geometry, material);
+      block.position.set(x, y, z);
+      block.castShadow = true;
+      block.receiveShadow = true;
+      return block;
+    }
+
+    // Terrain patches: floating islands, ruined pillars, mystical crystals
+    function buildEnvironment() {
+      // Central raised area
+      const basePlatform = createVoxelBlock(0x3a3f4f, 0, 0, 0, 2.0, 0.5, 0.3);
+      basePlatform.scale.set(2.5, 0.3, 2.5);
+      basePlatform.position.y = -0.35;
+      scene.add(basePlatform);
+
+      // Voxel ruins around
+      const ruinPositions = [
+        {x: -5, z: -2}, {x: 6, z: -4}, {x: -4, z: 5}, {x: 5, z: 6}, {x: 0, z: -7}, {x: -7, z: 0}
+      ];
+      ruinPositions.forEach((pos, index) => {
+        const pillarGroup = new THREE.Group();
+        const stoneColor = index % 2 === 0 ? 0x6b5a4a : 0x7d6e5d;
+        const height = 1.0 + Math.random() * 1.8;
+        for (let i = 0; i < 5; i++) {
+          const block = createVoxelBlock(stoneColor, 0, i * 0.5 + 0.25, 0, 0.5, 0.7, 0.1);
+          pillarGroup.add(block);
+        }
+        pillarGroup.position.set(pos.x, 0.5, pos.z);
+        pillarGroup.rotation.y = Math.random() * Math.PI;
+        scene.add(pillarGroup);
+
+        // Broken pieces
+        for (let j = 0; j < 3; j++) {
+          const piece = createVoxelBlock(0x5a4a3a, pos.x + (Math.random()-0.5)*1.5, 0.2 + Math.random()*0.5, pos.z + (Math.random()-0.5)*1.5, 0.3, 0.6, 0.2);
+          scene.add(piece);
+        }
+      });
+
+      // Glowing crystals
+      const crystalColors = [0xff44aa, 0x66ccff, 0x88ff88, 0xffaa44];
+      for (let k = 0; k < 12; k++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 4 + Math.random() * 9;
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        const crystalGroup = new THREE.Group();
+        const crystalColor = crystalColors[Math.floor(Math.random() * crystalColors.length)];
+        const crystalHeight = 0.8 + Math.random() * 1.8;
+        for (let h = 0; h < crystalHeight; h += 0.5) {
+          const crystal = createVoxelBlock(crystalColor, 0, h + 0.25, 0, 0.4, 0.1, 0.5, crystalColor);
+          crystal.scale.set(0.8, 1, 0.8);
+          crystalGroup.add(crystal);
+        }
+        crystalGroup.position.set(x, 0.2, z);
+        crystalGroup.rotation.y = Math.random() * Math.PI;
+        scene.add(crystalGroup);
+      }
+
+      // Floating mystical orbs (small spheres with glow)
+      for (let f = 0; f < 8; f++) {
+        const orbGeo = new THREE.SphereGeometry(0.2, 8, 8);
+        const orbMat = new THREE.MeshStandardMaterial({
+          color: 0xffaa33,
+          emissive: 0xff5500,
+          emissiveIntensity: 1.5,
+          roughness: 0.2,
+          metalness: 0.1
+        });
+        const orb = new THREE.Mesh(orbGeo, orbMat);
+        orb.position.set((Math.random()-0.5)*12, 2.0 + Math.random()*3, (Math.random()-0.5)*12);
+        orb.castShadow = true;
+        orb.receiveShadow = false;
+        scene.add(orb);
+      }
+    }
+
+    buildEnvironment();
+
+    // ---------- CHARACTER ----------
     const characterGroup = new THREE.Group();
-    scene.add(characterGroup);
-    
-    // Body
-    const bodyGeo = new THREE.BoxGeometry(0.9, 1.2, 0.6);
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x4a3f4a, roughness: 0.5, metalness: 0.3 });
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = 0.9;
+    // body
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 0.8, 0.5),
+      new THREE.MeshStandardMaterial({ color: 0x3d4a5c, roughness: 0.5, metalness: 0.4 })
+    );
+    body.position.y = 0.7;
     body.castShadow = true;
     body.receiveShadow = true;
     characterGroup.add(body);
-    
-    // Head
-    const headGeo = new THREE.BoxGeometry(0.7, 0.7, 0.7);
-    const headMat = new THREE.MeshStandardMaterial({ color: 0xd8c0a8, roughness: 0.6 });
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.y = 1.85;
+    // head
+    const head = new THREE.Mesh(
+      new THREE.BoxGeometry(0.5, 0.5, 0.5),
+      new THREE.MeshStandardMaterial({ color: 0xd4b896, roughness: 0.6, metalness: 0.1 })
+    );
+    head.position.y = 1.25;
     head.castShadow = true;
     head.receiveShadow = true;
     characterGroup.add(head);
-    
-    // Helmet visor
-    const visorGeo = new THREE.BoxGeometry(0.75, 0.2, 0.25);
-    const visorMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.2, metalness: 0.8 });
-    const visor = new THREE.Mesh(visorGeo, visorMat);
-    visor.position.set(0, 1.85, 0.36);
-    visor.castShadow = true;
-    characterGroup.add(visor);
-    
-    // Arms
-    const armGeo = new THREE.BoxGeometry(0.3, 0.8, 0.3);
-    const armMat = new THREE.MeshStandardMaterial({ color: 0x3a323a, roughness: 0.5 });
-    const leftArm = new THREE.Mesh(armGeo, armMat);
-    leftArm.position.set(-0.6, 1.15, 0);
-    leftArm.castShadow = true;
-    characterGroup.add(leftArm);
-    const rightArm = new THREE.Mesh(armGeo, armMat);
-    rightArm.position.set(0.6, 1.15, 0);
-    rightArm.castShadow = true;
-    characterGroup.add(rightArm);
-    
-    // Legs
-    const legGeo = new THREE.BoxGeometry(0.35, 0.8, 0.35);
-    const legMat = new THREE.MeshStandardMaterial({ color: 0x2c2a2c, roughness: 0.4, metalness: 0.2 });
-    const leftLeg = new THREE.Mesh(legGeo, legMat);
-    leftLeg.position.set(-0.25, 0.4, 0);
-    leftLeg.castShadow = true;
-    characterGroup.add(leftLeg);
-    const rightLeg = new THREE.Mesh(legGeo, legMat);
-    rightLeg.position.set(0.25, 0.4, 0);
-    rightLeg.castShadow = true;
-    characterGroup.add(rightLeg);
-    
-    // Cape (voxel)
-    const capeGeo = new THREE.BoxGeometry(0.9, 1.0, 0.2);
-    const capeMat = new THREE.MeshStandardMaterial({ color: 0x5c2e2e, roughness: 0.8 });
-    const cape = new THREE.Mesh(capeGeo, capeMat);
-    cape.position.set(0, 0.9, -0.4);
-    cape.castShadow = true;
-    characterGroup.add(cape);
-    
-    // Starting position
-    characterGroup.position.set(0, 0, 2.5);
-    
-    // Movement target
-    let targetPosition = new THREE.Vector3(0, 0, 2.5);
-    const moveSpeed = 0.08;
-    
-    // --- CLICK TO MOVE (raycast to floor) ---
+    // helmet / headpiece
+    const helm = new THREE.Mesh(
+      new THREE.BoxGeometry(0.55, 0.3, 0.55),
+      new THREE.MeshStandardMaterial({ color: 0x2a2e3a, roughness: 0.3, metalness: 0.8 })
+    );
+    helm.position.y = 1.5;
+    helm.castShadow = true;
+    helm.receiveShadow = true;
+    characterGroup.add(helm);
+    // weapon (sword on back)
+    const swordBlade = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.8, 0.1),
+      new THREE.MeshStandardMaterial({ color: 0xccccdd, roughness: 0.2, metalness: 1.0 })
+    );
+    swordBlade.position.set(-0.4, 0.9, -0.5);
+    swordBlade.castShadow = true;
+    characterGroup.add(swordBlade);
+    const swordHandle = new THREE.Mesh(
+      new THREE.BoxGeometry(0.15, 0.2, 0.15),
+      new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.7 })
+    );
+    swordHandle.position.set(-0.4, 0.5, -0.5);
+    swordHandle.castShadow = true;
+    characterGroup.add(swordHandle);
+    // base
+    const baseRing = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.6, 0.6, 0.1, 8),
+      new THREE.MeshStandardMaterial({ color: 0x111116, roughness: 0.1, metalness: 0.9 })
+    );
+    baseRing.position.y = 0.1;
+    baseRing.receiveShadow = true;
+    characterGroup.add(baseRing);
+    characterGroup.position.set(0, 0.2, 0);
+    scene.add(characterGroup);
+
+    // Movement target indicator (ring)
+    const targetIndicator = new THREE.Mesh(
+      new THREE.RingGeometry(0.4, 0.55, 32),
+      new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
+    );
+    targetIndicator.rotation.x = -Math.PI / 2;
+    targetIndicator.position.y = 0.05;
+    targetIndicator.visible = false;
+    scene.add(targetIndicator);
+
+    // ---------- ENVIRONMENTAL ANIMATIONS (subtle) ----------
+    const floatingOrbs = [];
+    scene.traverse((child) => {
+      if (child.isMesh && child.geometry.type === 'SphereGeometry' && child.material.emissive) {
+        floatingOrbs.push({ mesh: child, baseY: child.position.y, speed: 0.5 + Math.random() * 1.2, offset: Math.random() * Math.PI * 2 });
+      }
+    });
+
+    // Crystal pulse
+    const crystals = [];
+    scene.traverse((child) => {
+      if (child.isMesh && child.material.emissive && child.material.emissive.getHex() !== 0x000000 && child.geometry.type === 'BoxGeometry' && child.scale.x < 0.5) {
+        crystals.push({ mesh: child, baseIntensity: child.material.emissiveIntensity, phase: Math.random() * Math.PI * 2 });
+      }
+    });
+
+    // Time for animations
+    let clock = new THREE.Clock();
+
+    // ---------- CLICK TO MOVE (with limited area) ----------
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
-    
+    const moveTarget = new THREE.Vector3();
+    const characterTarget = new THREE.Vector3();
+    let isMoving = false;
+    const moveSpeed = 4.0;
+    const maxMoveRadius = 6.5; // limited space
+
     window.addEventListener('click', (event) => {
-      // Calculate mouse position in normalized device coordinates
+      if (event.target !== renderer.domElement) return;
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-      
       raycaster.setFromCamera(mouse, camera);
-      const intersects = raycaster.intersectObject(reflectorFloor);
-      
+      const intersects = raycaster.intersectObject(floor);
       if (intersects.length > 0) {
         const point = intersects[0].point;
-        // Clamp movement to limited space (radius ~13)
-        const dx = point.x;
-        const dz = point.z;
-        const dist = Math.sqrt(dx*dx + dz*dz);
-        if (dist < 13) {
-          targetPosition.set(dx, 0, dz);
-        } else {
-          // clamp to edge
-          const angle = Math.atan2(dz, dx);
-          targetPosition.set(Math.cos(angle)*12.5, 0, Math.sin(angle)*12.5);
-        }
+        // Clamp to radius
+        const clampedX = Math.max(-maxMoveRadius, Math.min(maxMoveRadius, point.x));
+        const clampedZ = Math.max(-maxMoveRadius, Math.min(maxMoveRadius, point.z));
+        const target = new THREE.Vector3(clampedX, 0.2, clampedZ);
+        moveTarget.copy(target);
+        characterTarget.copy(target);
+        isMoving = true;
+        targetIndicator.position.set(clampedX, 0.1, clampedZ);
+        targetIndicator.visible = true;
       }
     });
-    
-    // --- CAMERA LAZY FOLLOW (in animation loop) ---
-    
-    // --- ENVIRONMENT ANIMATION (orbs, crystals pulse, etc) ---
-    const clock = new THREE.Clock();
-    
-    // Store crystal materials for pulsing
-    const crystalMats = [];
-    scene.traverse(obj => {
-      if (obj.isMesh && obj.material && obj.material.emissive && obj.material.emissive.getHex() === 0x3a2a6a) {
-        crystalMats.push(obj.material);
-      }
-    });
-    
-    // --- ANIMATION LOOP ---
+
+    // Character walking bob
+    let walkPhase = 0;
+
+    // ---------- CAMERA LAZY FOLLOW ----------
+    controls.target = characterGroup.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+
+    // ---------- ANIMATION LOOP ----------
     function animate() {
-      const delta = clock.getDelta();
+      const delta = Math.min(clock.getDelta(), 0.1);
       const elapsedTime = performance.now() * 0.001;
-      
-      // Lazy follow: character moves toward target
-      const currentPos = characterGroup.position.clone();
-      const direction = new THREE.Vector3(
-        targetPosition.x - currentPos.x,
-        0,
-        targetPosition.z - currentPos.z
-      );
-      const distance = direction.length();
-      
-      if (distance > 0.1) {
-        direction.normalize();
-        const step = Math.min(moveSpeed, distance);
-        characterGroup.position.x += direction.x * step;
-        characterGroup.position.z += direction.z * step;
-        
-        // Simple rotation to face movement direction
-        if (direction.length() > 0.01) {
-          const angle = Math.atan2(direction.x, direction.z);
-          characterGroup.rotation.y = angle;
+
+      // Character movement
+      if (isMoving) {
+        const currentPos = characterGroup.position.clone();
+        currentPos.y = 0.2; // keep y constant
+        const targetPos = new THREE.Vector3(moveTarget.x, 0.2, moveTarget.z);
+        const distance = currentPos.distanceTo(targetPos);
+        if (distance > 0.1) {
+          const direction = targetPos.clone().sub(currentPos).normalize();
+          const step = moveSpeed * delta;
+          const newPos = currentPos.clone().add(direction.multiplyScalar(step));
+          // Clamp
+          newPos.x = Math.max(-maxMoveRadius, Math.min(maxMoveRadius, newPos.x));
+          newPos.z = Math.max(-maxMoveRadius, Math.min(maxMoveRadius, newPos.z));
+          characterGroup.position.x = newPos.x;
+          characterGroup.position.z = newPos.z;
+          // Bobbing
+          walkPhase += delta * 10;
+          characterGroup.position.y = 0.2 + Math.abs(Math.sin(walkPhase)) * 0.1;
+        } else {
+          characterGroup.position.x = moveTarget.x;
+          characterGroup.position.z = moveTarget.z;
+          characterGroup.position.y = 0.2;
+          isMoving = false;
+          targetIndicator.visible = false;
         }
-      }
-      
-      // Subtle idle bob for character
-      if (distance <= 0.1) {
-        characterGroup.position.y = Math.sin(elapsedTime * 2.5) * 0.03;
-        characterGroup.rotation.y += Math.sin(elapsedTime * 0.8) * 0.002;
       } else {
-        characterGroup.position.y = 0;
+        // Idle breathing
+        characterGroup.position.y = 0.2 + Math.sin(elapsedTime * 3) * 0.02;
       }
-      
+
+      // Lazy follow camera target
+      const desiredTarget = characterGroup.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+      controls.target.lerp(desiredTarget, 1.5 * delta);
+      controls.update();
+
       // Animate floating orbs
-      orbGroup.children.forEach((orb, index) => {
-        const data = orb.userData;
-        if (data.baseY !== undefined) {
-          orb.position.y = data.baseY + Math.sin(elapsedTime * data.speed + data.offset) * 0.7;
-          orb.rotation.x += 0.01;
-          orb.rotation.z += 0.02;
+      floatingOrbs.forEach((orb) => {
+        orb.mesh.position.y = orb.baseY + Math.sin(elapsedTime * orb.speed + orb.offset) * 0.8;
+        orb.mesh.rotation.y += 0.01;
+      });
+
+      // Pulse crystals
+      crystals.forEach((crystal) => {
+        if (crystal.mesh.material.emissiveIntensity) {
+          crystal.mesh.material.emissiveIntensity = crystal.baseIntensity + Math.sin(elapsedTime * 4 + crystal.phase) * 0.7;
         }
       });
-      
-      // Pulse crystals
-      crystalMats.forEach(mat => {
-        const pulse = 0.8 + Math.sin(elapsedTime * 2.0) * 0.4;
-        mat.emissiveIntensity = pulse;
-      });
-      
-      // Camera lazy follow: orbit target moves toward character smoothly
-      const desiredTarget = new THREE.Vector3(characterGroup.position.x, 1.6, characterGroup.position.z);
-      controls.target.lerp(desiredTarget, 0.05);
-      
-      // Update controls
-      controls.update();
-      
-      // Render
+
+      // Slight point light movement
+      pointLight1.position.x = 4 + Math.sin(elapsedTime * 1.3) * 2;
+      pointLight1.position.z = 3 + Math.cos(elapsedTime * 1.1) * 2;
+      pointLight2.position.x = -4 + Math.sin(elapsedTime * 1.8) * 2.5;
+      pointLight2.position.z = -3 + Math.cos(elapsedTime * 1.5) * 2;
+
       renderer.render(scene, camera);
       requestAnimationFrame(animate);
     }
-    
-    // Start animation
+
     animate();
-    
-    // --- RESIZE HANDLER ---
+
+    // Window resize
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // --- INITIAL TARGET SET ---
-    targetPosition.set(0, 0, 2.5);
-    
-    console.log('⚔️ Voxel Echoes ready — click to move, drag to rotate.');
+    console.log('Voxel dream loop activated. Click to move, drag to rotate, scroll to zoom.');
   </script>
 </body>
 </html>

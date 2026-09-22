@@ -106,9 +106,8 @@ display:flex;align-items:center;justify-content:center}
     <button id="btnStart">ПОГНАЛИ</button>
     <p class="ctrl">Вид сверху, как в GTA2 · WASD — движение · мышь — прицел · ЛКМ — огонь<br>
     E — угон/выход из машины · R — перезарядка · SHIFT — бег · SPACE — тормоз · ESC — пауза<br><br>
-    В машине: W — газ, S — тормоз, A/D — руль, камера отъезжает на скорости<br><br>
-    Голубая зона — укрытие: лечит и сбрасывает розыск · жёлтая зона — приёмка угнанных тачек<br>
-    Сдашь тачку без розыска — получишь деньги. Копы не дремлют.</p>
+    База — огороженный комплекс с воротами: зайди в здание через вход,<br>
+    там лечит и сбрасывает розыск · жёлтая зона — приёмка угнанных тачек</p>
   </div>
 </div>
 <div id="pause" class="ov" style="display:none">
@@ -167,7 +166,12 @@ const DIRS=[{x:1,z:0},{x:0,z:1},{x:-1,z:0},{x:0,z:-1}];
 const DIRA=[Math.PI/2,0,-Math.PI/2,Math.PI];
 const MAG=12,RELOAD_T=1.3;
 const CAR_HP=40,COP_CAR_HP=70;
-const BASE={x:380,z:350,r:14},DEALER={x:630,z:215,r:13};
+/* база: комплекс. Двор: x 352..404, z 322..378.
+   Здание: x 364..392, z 339..361, вход-дверь с юга x 374..382 */
+const BASE={x:378,z:350};
+const BASE_OUT={x0:352,z0:322,x1:404,z1:378};
+function inBaseRect(x,z){return x>BASE_OUT.x0&&x<BASE_OUT.x1&&z>BASE_OUT.z0&&z<BASE_OUT.z1;}
+const DEALER={x:630,z:215,r:13};
 const specialBlocks=new Set(['2,2','4,1']);
 function laneOff(d){return d===0?{x:0,z:LANE}:d===1?{x:-LANE,z:0}:d===2?{x:0,z:-LANE}:{x:LANE,z:0};}
 function nearestLine(v){let best=R[0],bd=1e9;for(const r of R){const d=Math.abs(v-r);if(d<bd){bd=d;best=r;}}return best;}
@@ -181,7 +185,7 @@ renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.3;
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x0e1226);
-scene.fog=new THREE.Fog(0x0e1226,200,850);
+scene.fog=new THREE.Fog(0x0e1226,150,660);
 const camera=new THREE.PerspectiveCamera(42,1,0.1,1600);
 
 scene.add(new THREE.HemisphereLight(0x6a7fb8,0x1c1626,1.5));
@@ -202,7 +206,7 @@ let composer=null;
 if(!isMobile){
   composer=new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene,camera));
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.75,0.55,0.55));
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.8,0.55,0.5));
   composer.addPass(new OutputPass());
 }
 resize();
@@ -216,12 +220,15 @@ scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0xcfdaff,size:1.7,s
 
 /* ============ ГЕНЕРАЦИЯ ГОРОДА ============ */
 const boxes=[];
-const solids=[],wins=[],signsArr=[],trunks=[],leaves=[],lampPoles=[],lampHeads=[],poolsA=[],tlPoles=[],tlHeadList=[];
+const solids=[],wins=[],signsArr=[],trunks=[],leaves=[],lampPoles=[],lampHeads=[],poolsA=[],tlPoles=[],tlHeadList=[],tlGlows=[];
 const blockPark=[];
 for(let i=0;i<GRID;i++){blockPark[i]=[];for(let j=0;j<GRID;j++)
 blockPark[i][j]=specialBlocks.has(i+','+j)?false:srng()<0.28;}
 
-function nearPad(x,z,m){return dist2(x,z,BASE.x,BASE.z)<BASE.r+m||dist2(x,z,DEALER.x,DEALER.z)<DEALER.r+m;}
+function nearPad(x,z,m){
+  if(x>BASE_OUT.x0-4-m&&x<BASE_OUT.x1+4+m&&z>BASE_OUT.z0-4-m&&z<BASE_OUT.z1+4+m)return true;
+  return dist2(x,z,DEALER.x,DEALER.z)<DEALER.r+m;
+}
 
 const palette=['#6e6250','#5c5850','#756752','#2e3a58','#3d2f52','#254652','#6d5f4a','#3a4a38','#6b4650','#4a5a3a'];
 const signCols=[new THREE.Color(0,1.5,1.8),new THREE.Color(1.8,.35,.9),new THREE.Color(1.9,1.8,.15),
@@ -296,26 +303,70 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
       addBuilding(p.x,p.z,p.w/VS|0,p.d/VS|0,Math.min(8,5+(srng()*3|0)+(srng()<.1?2:0)));
     }
   }
+  /* фонари по углам перекрёстков (только внутри периметра карты) */
   for(let i=0;i<=GRID;i++)for(let j=0;j<=GRID;j++){
     const x=i*CELL,z=j*CELL,o=AW+2.5;
     for(const s of[[-o,-o],[o,o]]){
       const lx=x+s[0],lz=z+s[1];
-      /* ЗА ПЕРИМЕТРОМ КАРТЫ НИЧЕГО НЕ ГЕНЕРИРУЕМ */
       if(lx<6||lx>WORLD-6||lz<6||lz>WORLD-6)continue;
       lampPoles.push({x:lx,y:3.4,z:lz,sx:.5,sy:6.8,sz:.5});
       lampHeads.push({x:lx,y:7.1,z:lz,sx:1.1,sy:.6,sz:1.1});
       poolsA.push({x:lx,z:lz});
     }
-    if(i<GRID&&j<GRID){
-      /* светофорный столб: у верхней кромки карты (j=0) угол z-o ушёл бы
-         за периметр — ставим столб с внутренней стороны перекрёстка */
-      let pz=z-o,px=x+o;
-      if(pz<6){pz=z+o-3.5;px=x+o-3.5;}
-      tlPoles.push({x:px,y:2.6,z:pz,sx:.45,sy:5.2,sz:.45});
-      tlHeadList.push({x:px+.8,y:5.4,z:pz,axis:0,ci:i,cj:j,c:new THREE.Color(0x35ff77)});
-      tlHeadList.push({x:px-.8,y:5.4,z:pz,axis:1,ci:i,cj:j,c:new THREE.Color(0xff2a3c)});
+  }
+  /* СВЕТОФОРЫ: по столбу на центре каждой стоп-линии (4 подъезда
+     к каждому перекрёстку) + световое пятно на асфальте в цвет сигнала */
+  for(let i=0;i<GRID;i++)for(let j=0;j<GRID;j++){
+    const cx=i*CELL,cz=j*CELL,sl=AW+8;
+    for(const s of[-1,1]){
+      const px=cx+s*sl;
+      if(px<8||px>WORLD-8)continue;
+      tlPoles.push({x:px,y:3,z:cz,sx:.5,sy:6,sz:.5});
+      tlHeadList.push({x:px,y:6.4,z:cz,sx:1.5,sy:1.5,sz:1.5,axis:0,ci:i,cj:j,c:new THREE.Color(0x35ff77)});
+      tlGlows.push({x:px,y:.14,z:cz,axis:0,ci:i,cj:j,c:new THREE.Color(.15,1.0,.35)});
+    }
+    for(const s of[-1,1]){
+      const pz=cz+s*sl;
+      if(pz<8||pz>WORLD-8)continue;
+      tlPoles.push({x:cx,y:3,z:pz,sx:.5,sy:6,sz:.5});
+      tlHeadList.push({x:cx,y:6.4,z:pz,sx:1.5,sy:1.5,sz:1.5,axis:1,ci:i,cj:j,c:new THREE.Color(0x35ff77)});
+      tlGlows.push({x:cx,y:.14,z:pz,axis:1,ci:i,cj:j,c:new THREE.Color(.15,1.0,.35)});
     }
   }
+})();
+
+/* ============ БАЗА: здание со входом + стены двора ============ */
+const trimCyan=new THREE.Color(0,1.5,1.8);
+function addWallSeg(x0,z0,x1,z1,hUnits,trim){
+  const horiz=(z1-z0)<=(x1-x0);
+  const len=horiz?x1-x0:z1-z0;
+  const n=Math.max(1,Math.round(len/2));
+  const col=new THREE.Color(0x46506a);
+  for(let i=0;i<n;i++){
+    const cx=horiz?x0+1+i*2:(x0+x1)/2;
+    const cz=horiz?(z0+z1)/2:z0+1+i*2;
+    for(let y=0;y<hUnits;y++)
+      solids.push({x:cx,y:1+y*2,z:cz,sx:2,sy:2,sz:2,c:col.clone().multiplyScalar(sRand(.8,1.1))});
+    if(trim&&i%2===0)signsArr.push({x:cx,y:hUnits*2+1,z:cz,sx:2.3,sy:1,sz:2.3,c:trimCyan});
+  }
+  boxes.push({x:(x0+x1)/2,z:(z0+z1)/2,hw:Math.max(1,(x1-x0)/2),hd:Math.max(1,(z1-z0)/2),h:hUnits*2});
+}
+(function buildBase(){
+  /* здание базы: стены с проёмом-входом с юга (x 374..382) */
+  addWallSeg(364,339,392,341,6,true);          /* север */
+  addWallSeg(364,359,374,361,6,true);          /* юг, слева от входа */
+  addWallSeg(382,359,392,361,6,true);          /* юг, справа от входа */
+  addWallSeg(364,341,366,359,6,true);          /* запад */
+  addWallSeg(390,341,392,359,6,true);          /* восток */
+  /* периметровая стена двора с воротами с юга (x 372..388) */
+  addWallSeg(352,322,404,324,3,true);
+  addWallSeg(352,324,354,378,3,true);
+  addWallSeg(402,324,404,378,3,true);
+  addWallSeg(352,376,372,378,3,true);
+  addWallSeg(388,376,404,378,3,true);
+  /* неоновые маячки у ворот и входа */
+  for(const gx of[373,375,385,387])signsArr.push({x:gx,y:4,z:377,sx:1,sy:8,sz:1,c:new THREE.Color(1.9,1.8,.15)});
+  for(const dx of[375,381])signsArr.push({x:dx,y:5,z:360,sx:1,sy:10,sz:1,c:trimCyan});
 })();
 
 /* земля с текстурой дороги (пиксель = мировая координата, без сдвигов) */
@@ -328,26 +379,51 @@ function makeGroundTexture(){
     g.fillStyle=blockPark[i][j]?'#1d3a26':'#1a2130';
     g.fillRect(X(i*CELL+15),X(j*CELL+15),(CELL-30)*k,(CELL-30)*k);
   }
+  g.fillStyle='#18212e';g.fillRect(X(BASE_OUT.x0),X(BASE_OUT.z0),52*k,56*k);
+  g.fillStyle='#1e2736';g.fillRect(X(366),X(341),24*k,18*k);
   g.fillStyle='#3d4454';
   for(let i=0;i<=GRID;i++){g.fillRect(0,X(i*CELL-15),S,30*k);g.fillRect(X(i*CELL-15),0,30*k,S);}
   g.fillStyle='#2b313d';
   for(let i=0;i<=GRID;i++){g.fillRect(0,X(i*CELL-AW),S,AW*2*k);g.fillRect(X(i*CELL-AW),0,AW*2*k,S);}
+  /* прерывистая разметка — С ПРОПУСКОМ ПЕРЕКРЁСТКОВ */
   g.strokeStyle='rgba(252,238,10,.95)';g.lineWidth=Math.max(1.2,.8*k);g.setLineDash([8*k,10*k]);
+  const nearCross=v=>R.some(r=>Math.abs(v-r)<AW+12);
   g.beginPath();
-  for(let i=0;i<=GRID;i++){g.moveTo(0,X(i*CELL));g.lineTo(S,X(i*CELL));g.moveTo(X(i*CELL),0);g.lineTo(X(i*CELL),S);}
+  for(let i=0;i<=GRID;i++){
+    const zc=R[i];let run=null;
+    for(let x=0;x<=WORLD;x+=2){
+      const ok=x<WORLD&&!nearCross(x);
+      if(ok){if(run===null)run=x;}
+      else if(run!==null){g.moveTo(X(run),X(zc));g.lineTo(X(x),X(zc));run=null;}
+    }
+    const xc=R[i];run=null;
+    for(let z=0;z<=WORLD;z+=2){
+      const ok=z<WORLD&&!nearCross(z);
+      if(ok){if(run===null)run=z;}
+      else if(run!==null){g.moveTo(X(xc),X(run));g.lineTo(X(xc),X(z));run=null;}
+    }
+  }
   g.stroke();g.setLineDash([]);
+  /* зебры у перекрёстков */
   g.fillStyle='rgba(210,225,255,.55)';
   for(let i=1;i<GRID;i++)for(let j=1;j<GRID;j++)for(const s of[-1,1])for(let st=-3;st<=3;st++){
     g.fillRect(X(i*CELL+st*2.2-.8),X(j*CELL+s*(AW+3)-2.8),1.6*k,5.6*k);
     g.fillRect(X(i*CELL+s*(AW+3)-2.8),X(j*CELL+st*2.2-.8),5.6*k,1.6*k);
   }
-  g.fillStyle='rgba(0,240,255,.4)';g.fillRect(X(BASE.x-12),X(BASE.z-12),24*k,24*k);
+  g.fillStyle='rgba(0,240,255,.4)';g.fillRect(X(BASE.x-10),X(BASE.z-8),20*k,16*k);
   g.fillStyle='rgba(252,238,10,.4)';g.fillRect(X(DEALER.x-12),X(DEALER.z-12),24*k,24*k);
   const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
 }
 {const m=new THREE.Mesh(new THREE.PlaneGeometry(WORLD,WORLD).rotateX(-Math.PI/2),
   new THREE.MeshLambertMaterial({map:makeGroundTexture()}));
  m.position.set(WORLD/2,0,WORLD/2);scene.add(m);}
+
+function radialTex(rgb){
+  const c=document.createElement('canvas');c.width=c.height=128;
+  const g=c.getContext('2d'),gr=g.createRadialGradient(64,64,4,64,64,62);
+  gr.addColorStop(0,`rgba(${rgb},.55)`);gr.addColorStop(1,`rgba(${rgb},0)`);
+  g.fillStyle=gr;g.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);
+}
 
 function mkInst(list,geo,mat,useColor){
   if(!list.length)return null;
@@ -361,8 +437,10 @@ function mkInst(list,geo,mat,useColor){
   im.frustumCulled=false;scene.add(im);return im;
 }
 const unitBox=new THREE.BoxGeometry(1,1,1);
+const glowPlaneGeo=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);
 mkInst(solids,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(wins,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
+/* неоновые вывески + неоновая окантовка базы (HDR-цвета для bloom) */
 mkInst(signsArr,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
 mkInst(trunks,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(leaves,unitBox,new THREE.MeshLambertMaterial(),true);
@@ -370,25 +448,24 @@ mkInst(lampPoles,unitBox,new THREE.MeshLambertMaterial({color:0x39404e}),false);
 mkInst(lampHeads,unitBox,new THREE.MeshBasicMaterial({color:new THREE.Color(2.4,1.8,1.0),toneMapped:false}),false);
 mkInst(tlPoles,unitBox,new THREE.MeshLambertMaterial({color:0x2c3038}),false);
 const tlHeadMesh=mkInst(tlHeadList,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
-function radialTex(rgb){
-  const c=document.createElement('canvas');c.width=c.height=128;
-  const g=c.getContext('2d'),gr=g.createRadialGradient(64,64,4,64,64,62);
-  gr.addColorStop(0,`rgba(${rgb},.55)`);gr.addColorStop(1,`rgba(${rgb},0)`);
-  g.fillStyle=gr;g.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);
-}
+const tlGlowMesh=mkInst(tlGlows,glowPlaneGeo,
+  new THREE.MeshBasicMaterial({map:radialTex('255,255,255'),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),true);
 mkInst(poolsA,new THREE.PlaneGeometry(20,20).rotateX(-Math.PI/2),
   new THREE.MeshBasicMaterial({map:radialTex('255,208,140'),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),false);
-const padBase=new THREE.Mesh(new THREE.PlaneGeometry(24,24).rotateX(-Math.PI/2),
+const padBase=new THREE.Mesh(new THREE.PlaneGeometry(20,15).rotateX(-Math.PI/2),
   new THREE.MeshBasicMaterial({color:0x00f0ff,transparent:true,opacity:.35,depthWrite:false}));
 padBase.position.set(BASE.x,.12,BASE.z);scene.add(padBase);
+/* светящаяся полоса-вход в здание */
+const doorGlow=new THREE.Mesh(new THREE.PlaneGeometry(8,3).rotateX(-Math.PI/2),
+  new THREE.MeshBasicMaterial({color:new THREE.Color(0,1.4,1.6),transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
+doorGlow.position.set(378,.13,360.2);scene.add(doorGlow);
 const padDealer=new THREE.Mesh(new THREE.PlaneGeometry(24,24).rotateX(-Math.PI/2),
   new THREE.MeshBasicMaterial({color:0xfcee0a,transparent:true,opacity:.35,depthWrite:false}));
 padDealer.position.set(DEALER.x,.12,DEALER.z);scene.add(padDealer);
 
 /* ============ РЕАЛЬНЫЕ ИСТОЧНИКИ СВЕТА ============ */
-/* фонари: пул точечных, "переезжающих" на ближайшие к игроку столбы */
 const lampLights=[];
-{const N=isMobile?4:6;
+{const N=isMobile?3:5;
 for(let i=0;i<N;i++){const L=new THREE.PointLight(0xffb870,0,60,1.9);L.position.y=6.8;scene.add(L);lampLights.push(L);}}
 let lampTimer=0;
 function updateLampLights(dt){
@@ -404,26 +481,47 @@ function updateLampLights(dt){
     else L.intensity=0;
   }
 }
+/* СВЕЧЕНИЕ НЕОНОВЫХ ВЫВЕСОК: цветные точечные светильники
+   на ближайших к игроку вывесках — льют свой цвет на стену и улицу */
+const signLights=[];
+{const N=isMobile?1:3;
+for(let i=0;i<N;i++){const L=new THREE.PointLight(0xffffff,0,30,1.9);scene.add(L);signLights.push(L);}}
+let signTimer=0;
+function updateSignLights(dt){
+  signTimer-=dt;if(signTimer>0)return;signTimer=.35;
+  const px=player.inCar?player.inCar.x:player.x,pz=player.inCar?player.inCar.z:player.z;
+  const arr=[];
+  for(const s of signsArr){
+    if(s.sy>6)continue; /* окантовку базы и маячки пропускаем — только вывески */
+    const d=(s.x-px)*(s.x-px)+(s.z-pz)*(s.z-pz);
+    if(d<130*130)arr.push({s,d});
+  }
+  arr.sort((a,b)=>a.d-b.d);
+  for(let i=0;i<signLights.length;i++){
+    const L=signLights[i],e=arr[i];
+    if(e){L.position.set(e.s.x,e.s.y,e.s.z);L.color.copy(e.s.c);L.intensity=150;}
+    else L.intensity=0;
+  }
+}
 
-/* ФАРЫ И СТОП-СИГНАЛЫ ВСЕХ МАШИН.
-   Каждая машина получает свет от ДВУХ прожекторов (левый/правый) + красный
-   стоп-сигнал. Чтобы не плодить сотни лайтов, работает пул "ригов",
-   которые каждые 0.3 сек переназначаются ближайшим к игроку машинам. */
-const glowPlaneGeo=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);
+/* ФАРЫ И СТОП-СИГНАЛЫ ВСЕХ МАШИН: ДВА прожектора фар +
+   ДВА красных стоп-фонаря (по одному с каждой стороны) */
 const headGlowMat=new THREE.MeshBasicMaterial({map:radialTex('255,235,180'),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
-const tailGlowMat=new THREE.MeshBasicMaterial({map:radialTex('255,50,40'),transparent:true,opacity:.55,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
+const tailGlowMat=new THREE.MeshBasicMaterial({map:radialTex('255,50,40'),transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
 const carRigs=[];
-{const N=isMobile?2:4;
+{const N=isMobile?2:3;
 for(let i=0;i<N;i++){
   const hL=new THREE.SpotLight(0xffe2b0,0,80,0.55,0.5,1.6);
   const hR=new THREE.SpotLight(0xffe2b0,0,80,0.55,0.5,1.6);
-  const tail=new THREE.PointLight(0xff2222,0,16,2);
+  const tL=new THREE.PointLight(0xff2222,0,15,2);
+  const tR=new THREE.PointLight(0xff2222,0,15,2);
   const glow=new THREE.Mesh(glowPlaneGeo,headGlowMat);
-  const tglow=new THREE.Mesh(glowPlaneGeo,tailGlowMat);
-  glow.scale.set(13,1,20);tglow.scale.set(5,1,7);
-  glow.visible=tglow.visible=false;
-  scene.add(hL,hR,hL.target,hR.target,tail,glow,tglow);
-  carRigs.push({car:null,hL,hR,tail,glow,tglow});
+  const tgL=new THREE.Mesh(glowPlaneGeo,tailGlowMat);
+  const tgR=new THREE.Mesh(glowPlaneGeo,tailGlowMat);
+  glow.scale.set(13,1,20);tgL.scale.set(3,1,5);tgR.scale.set(3,1,5);
+  glow.visible=tgL.visible=tgR.visible=false;
+  scene.add(hL,hR,hL.target,hR.target,tL,tR,glow,tgL,tgR);
+  carRigs.push({car:null,hL,hR,tL,tR,glow,tgL,tgR});
 }}
 let rigTimer=0;
 function updateCarRigs(dt){
@@ -431,18 +529,18 @@ function updateCarRigs(dt){
   const px=player.inCar?player.inCar.x:player.x,pz=player.inCar?player.inCar.z:player.z;
   const cand=[];
   for(const c of cars){
-    if(c.dead||c.player||!c.ai)continue; /* припаркованные — с выключенным светом */
+    if(c.dead||c.player||!c.ai)continue;
     const d=dist2(c.x,c.z,px,pz);
-    if(d<240)cand.push({c,d});
+    if(d<220)cand.push({c,d});
   }
   cand.sort((a,b)=>a.d-b.d);
   for(let i=0;i<carRigs.length;i++)carRigs[i].car=cand[i]?cand[i].c:null;
 }
 function applyRig(rig){
   const c=rig.car;
-  if(!c||c.dead||dist2(c.x,c.z,player.x,player.z)>250){
-    rig.hL.intensity=rig.hR.intensity=rig.tail.intensity=0;
-    rig.glow.visible=rig.tglow.visible=false;
+  if(!c||c.dead||dist2(c.x,c.z,player.x,player.z)>230){
+    rig.hL.intensity=rig.hR.intensity=rig.tL.intensity=rig.tR.intensity=0;
+    rig.glow.visible=rig.tgL.visible=rig.tgR.visible=false;
     return;
   }
   const fx=Math.sin(c.angle),fz=Math.cos(c.angle);
@@ -452,28 +550,32 @@ function applyRig(rig){
   rig.hR.position.set(c.x+fx*4.5+rxv*1.5,1.8,c.z+fz*4.5+rzv*1.5);
   rig.hL.target.position.set(c.x+fx*30-rxv*1.5,0,c.z+fz*30-rzv*1.5);
   rig.hR.target.position.set(c.x+fx*30+rxv*1.5,0,c.z+fz*30+rzv*1.5);
-  /* стоп-сигнал: ярко при торможении, тускло — габарит */
-  rig.tail.position.set(c.x-fx*4.7,1.6,c.z-fz*4.7);
-  rig.tail.intensity=c.braking?90:22;
+  /* два стоп-фонаря сзади, слева и справа */
+  const bx=c.x-fx*4.7,bz=c.z-fz*4.7;
+  rig.tL.position.set(bx-rxv*1.6,1.6,bz-rzv*1.6);
+  rig.tR.position.set(bx+rxv*1.6,1.6,bz+rzv*1.6);
+  rig.tL.intensity=rig.tR.intensity=c.braking?85:20;
   rig.glow.visible=true;
   rig.glow.position.set(c.x+fx*9,.09,c.z+fz*9);
   rig.glow.rotation.y=c.angle;
-  rig.tglow.visible=true;
-  rig.tglow.position.set(c.x-fx*5.5,.1,c.z-fz*5.5);
-  rig.tglow.rotation.y=c.angle;
-  rig.tglow.material=c.braking?tailGlowMat:tailGlowMat;
-  rig.tglow.scale.set(c.braking?7:5,1,c.braking?9:7);
+  const ts=c.braking?1.5:1;
+  rig.tgL.visible=rig.tgR.visible=true;
+  rig.tgL.position.set(c.x-fx*5.4-rxv*1.7,.1,c.z-fz*5.4-rzv*1.7);
+  rig.tgR.position.set(c.x-fx*5.4+rxv*1.7,.1,c.z-fz*5.4+rzv*1.7);
+  rig.tgL.scale.set(3*ts,1,5*ts);rig.tgR.scale.set(3*ts,1,5*ts);
 }
 
-/* фары + стоп-сигнал машины игрока (два прожектора + красный свет сзади) */
+/* машина игрока: 2 фары + 2 стоп-фонаря */
 const headL=new THREE.SpotLight(0xffe2b0,0,110,0.52,0.45,1.5);
 const headR=new THREE.SpotLight(0xffe2b0,0,110,0.52,0.45,1.5);
-const playerTail=new THREE.PointLight(0xff2222,0,18,2);
-scene.add(headL,headR,headL.target,headR.target,playerTail);
+const ptL=new THREE.PointLight(0xff2222,0,18,2);
+const ptR=new THREE.PointLight(0xff2222,0,18,2);
+scene.add(headL,headR,headL.target,headR.target,ptL,ptR);
 const headGlow=new THREE.Mesh(glowPlaneGeo,headGlowMat);
-const tailGlow=new THREE.Mesh(glowPlaneGeo,tailGlowMat);
-headGlow.scale.set(15,1,24);tailGlow.scale.set(6,1,8);
-scene.add(headGlow,tailGlow);
+const ptGlowL=new THREE.Mesh(glowPlaneGeo,tailGlowMat);
+const ptGlowR=new THREE.Mesh(glowPlaneGeo,tailGlowMat);
+headGlow.scale.set(15,1,24);ptGlowL.scale.set(3.5,1,5.5);ptGlowR.scale.set(3.5,1,5.5);
+scene.add(headGlow,ptGlowL,ptGlowR);
 
 const sirLight=new THREE.PointLight(0xff2233,0,45,1.8);scene.add(sirLight);
 const fxLights=[];
@@ -727,21 +829,27 @@ const peds=[],cops=[];
 function makePed(x,z){
   const h=makeHuman(PED_SHIRTS[sri(9)],PED_PANTS[sri(4)],PED_SKIN[sri(4)],PED_HAIR[sri(5)]);
   scene.add(h.g);
-  peds.push({x,z,a:rand(0,TAU),h,phase:rand(0,9),turnT:rand(1,4),panic:0,dead:false,deadT:0,fall:0});
+  const p={x:clamp(x,10,WORLD-10),z:clamp(z,10,WORLD-10),a:rand(0,TAU),h,phase:rand(0,9),
+    turnT:rand(1,4),panic:0,dead:false,deadT:0,fall:0};
+  collideBoxes(p,.8); /* пешеход никогда не спавнится внутри стен */
+  peds.push(p);return p;
 }
 function makeCop(x,z){
   const h=makeHuman(0x24407a,0x1a1d26,0xd9a066,0x0a0c12);
   scene.add(h.g);
-  cops.push({x,z,a:0,h,phase:0,fireCd:rand(.5,1.2),hp:2,dead:false,deadT:0,fall:0});
+  const c={x:clamp(x,10,WORLD-10),z:clamp(z,10,WORLD-10),a:0,h,phase:0,
+    fireCd:rand(.5,1.2),hp:2,dead:false,deadT:0,fall:0};
+  collideBoxes(c,.9);
+  cops.push(c);
 }
 
-const player={x:BASE.x,z:BASE.z+18,a:Math.PI,hp:100,ammo:MAG,reload:0,fireCd:0,inCar:null,moving:false,phase:0,formA:0};
+const player={x:BASE.x,z:368,a:Math.PI,hp:100,ammo:MAG,reload:0,fireCd:0,inCar:null,moving:false,phase:0,formA:0};
 const playerH=makeHuman(0xfcee0a,0x1a1d26,0xd9a066,0x14161c);
 const gun=new THREE.Mesh(new THREE.BoxGeometry(.35,.5,1.5),new THREE.MeshLambertMaterial({color:0x181c26}));
 gun.position.set(.86,2.3,.75);playerH.g.add(gun);
 scene.add(playerH.g);
 
-const shadowMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),
+const shadowMesh=new THREE.InstancedMesh(glowPlaneGeo,
   new THREE.MeshBasicMaterial({map:radialTex('0,0,0'),transparent:true,opacity:.45,depthWrite:false}),80);
 shadowMesh.frustumCulled=false;scene.add(shadowMesh);
 
@@ -847,7 +955,6 @@ function updateAICar(car,dt){
   let target=(blocked||stop)?0:car.cruise;
   if(stop&&car.nc!=null){const dS=alongDist(car)-(AW+8);
     if(dS>0)target=Math.min(target,1.2*Math.sqrt(Math.max(.1,dS)));else target=0;}
-  /* стоп-сигнал горит, когда машина тормозит/стоит */
   car.braking=(target===0&&car.speed>.4)||(blocked&&car.speed>.4);
   car.speed+=clamp(target-car.speed,-30*dt,(car.cop?20:9)*dt);
   if(car.speed<.05)car.speed=0;
@@ -897,7 +1004,7 @@ function updateCopCar(car,dt){
     if(car.speed<1&&car.crew>0){
       for(let i=0;i<car.crew;i++){
         const a=car.angle+Math.PI/2*(i===0?1:-1);
-        makeCop(clamp(car.x+Math.sin(a)*3,10,WORLD-10),clamp(car.z+Math.cos(a)*3,10,WORLD-10));
+        makeCop(car.x+Math.sin(a)*3,car.z+Math.cos(a)*3);
       }
       car.crew=0;car.deployed=true;sDoor();
     }
@@ -1074,7 +1181,6 @@ function updatePlayerCar(car,dt){
     steer=(keys.KeyD?1:0)-(keys.KeyA?1:0);
     brake=!!keys.Space;
   }
-  /* стоп-сигнал игрока: тормоз или торможение двигателем */
   car.braking=brake||(thr<0&&car.speed>1);
   if(thr>0)car.speed+=26*thr*dt;
   else if(thr<0)car.speed+=(car.speed>1?-34:-14)*(-thr)*dt;
@@ -1086,6 +1192,10 @@ function updatePlayerCar(car,dt){
   car.x+=Math.sin(car.angle)*car.speed*dt;
   car.z+=Math.cos(car.angle)*car.speed*dt;
   collideBoxes(car,5);
+  /* КЛЮЧЕВОЙ ФИКС ТЕЛЕПОРТА: позиция игрока всегда синхронна машине.
+     При выходе игрок гарантированно оказывается рядом с машиной,
+     а не там, где садился в неё */
+  player.x=car.x;player.z=car.z;
   if(dist2(ox,oz,car.x,car.z)<Math.abs(car.speed)*dt*.5&&Math.abs(car.speed)>7){
     car.speed*=-.35;car.braking=true;
     damageCar(car,Math.abs(car.speed)*1.0);
@@ -1124,7 +1234,9 @@ function tryEnterExit(){
   if(wasCop){addHeat(1);floatAt(best.x,5,best.z,'УГОН ПОЛИЦИИ! +★','#ff003c');}
   else if(wasAI){
     addHeat(.7);
-    makePed(best.x+Math.sin(best.angle+Math.PI/2)*3,best.z+Math.cos(best.angle+Math.PI/2)*3);
+    /* высаживаем водителя рядом, выталкиваем из стен */
+    const np=makePed(best.x+Math.sin(best.angle+Math.PI/2)*3,best.z+Math.cos(best.angle+Math.PI/2)*3);
+    np.panic=3;np.a=Math.atan2(np.z-best.z,np.x-best.x);
     sDoor();scare(best.x,best.z,30);
   }else{
     let seen=false;for(const p of peds)if(!p.dead&&dist2(p.x,p.z,best.x,best.z)<25){seen=true;break;}
@@ -1132,31 +1244,42 @@ function tryEnterExit(){
     sDoor();
   }
 }
+/* ВЫХОД ИЗ МАШИНЫ: полный круг из 12 направлений на 5 нарастающих
+   радиусах; если ничего не нашли — ставим на место машины и даём
+   коллизиям вытолкнуть. Вернуться "в другой конец карты" невозможно. */
 function exitCar(){
   const car=player.inCar;if(!car)return;
   car.player=false;car.parked=true;car.speed=0;car.braking=false;
   player.inCar=null;playerH.g.visible=true;
-  const a=car.angle+Math.PI/2;
   let placed=false;
-  for(const s of[1,-1]){
-    for(const dd of[4,6,8]){
-      const px=car.x+Math.sin(a)*dd*s,pz=car.z+Math.cos(a)*dd*s;
-      if(!pointInBoxes(px,pz,1.1)&&px>8&&pz>8&&px<WORLD-8&&pz<WORLD-8){player.x=px;player.z=pz;placed=true;break;}
+  search:
+  for(const dd of[4.5,6,8,10,12.5]){
+    for(let k=0;k<12;k++){
+      const a=car.angle+Math.PI*(k/6);
+      const px=car.x+Math.sin(a)*dd,pz=car.z+Math.cos(a)*dd;
+      if(px<8||pz<8||px>WORLD-8||pz>WORLD-8)continue;
+      if(pointInBoxes(px,pz,1.1))continue;
+      let free=true;
+      for(const o of cars){if(o===car||o.dead)continue;
+        if(dist2(px,pz,o.x,o.z)<5.5){free=false;break;}}
+      if(!free)continue;
+      player.x=px;player.z=pz;placed=true;break search;
     }
-    if(placed)break;
   }
-  collideBoxes(player,1.1);sDoor();
+  if(!placed){player.x=car.x;player.z=car.z+.01;}
+  collideBoxes(player,1.1);
+  sDoor();
 }
 
 /* ============ ЗАКОН ============ */
 function updateLaw(dt){
+  const inBase=inBaseRect(player.x,player.z);
   if(heat>0){
     const noCrime=gameTime-lastCrime>12;
-    const inBase=dist2(player.x,player.z,BASE.x,BASE.z)<BASE.r+6;
     if(noCrime||inBase)heat=Math.max(0,heat-dt*(inBase?.9:.05));
-    if(inBase&&player.hp<100)player.hp=Math.min(100,player.hp+dt*5);
-    document.getElementById('baseHud').style.display=inBase?'block':'none';
-  }else document.getElementById('baseHud').style.display='none';
+  }
+  if(inBase&&player.hp<100)player.hp=Math.min(100,player.hp+dt*5);
+  document.getElementById('baseHud').style.display=inBase?'block':'none';
   const stars=level();
   let copCars=0;for(const c of cars)if(c.cop&&!c.dead&&!c.player)copCars++;
   copSpawnT-=dt;
@@ -1272,6 +1395,7 @@ function update(dt){
   if(player.reload>0){player.reload-=dt;if(player.reload<=0)player.ammo=MAG;}
   if(muzzleT>0){muzzleT-=dt;if(muzzleT<=0){muzzleLight.intensity=0;muzzleLight.visible=false;}}
   updateLampLights(dt);
+  updateSignLights(dt);
   updateCarRigs(dt);
   updateFxLights(dt);
   if(player.inCar&&!player.inCar.dead)updatePlayerCar(player.inCar,dt);
@@ -1358,7 +1482,7 @@ function syncWorld(){
   for(const c of cops)if(!c.dead)putShadow(c.x,c.z,3);
   if(!player.inCar)putShadow(player.x,player.z,3);
   shadowMesh.count=si;shadowMesh.instanceMatrix.needsUpdate=true;
-  /* фары + стоп-сигнал машины игрока: два прожектора + красный свет */
+  /* машина игрока: 2 прожектора фар + 2 красных стоп-фонаря */
   if(player.inCar&&!player.inCar.dead){
     const c=player.inCar;
     const fx=Math.sin(c.angle),fz=Math.cos(c.angle);
@@ -1368,20 +1492,22 @@ function syncWorld(){
     headR.position.set(c.x+fx*4.5+rxv*1.5,1.8,c.z+fz*4.5+rzv*1.5);
     headL.target.position.set(c.x+fx*30-rxv*1.5,0,c.z+fz*30-rzv*1.5);
     headR.target.position.set(c.x+fx*30+rxv*1.5,0,c.z+fz*30+rzv*1.5);
-    playerTail.position.set(c.x-fx*4.7,1.6,c.z-fz*4.7);
-    playerTail.intensity=c.braking?120:30;
+    const bx=c.x-fx*4.7,bz=c.z-fz*4.7;
+    ptL.position.set(bx-rxv*1.6,1.6,bz-rzv*1.6);
+    ptR.position.set(bx+rxv*1.6,1.6,bz+rzv*1.6);
+    ptL.intensity=ptR.intensity=c.braking?110:28;
     headGlow.visible=true;
     headGlow.position.set(c.x+fx*10,.09,c.z+fz*10);
     headGlow.rotation.y=c.angle;
-    tailGlow.visible=true;
-    tailGlow.position.set(c.x-fx*5.5,.1,c.z-fz*5.5);
-    tailGlow.rotation.y=c.angle;
-    tailGlow.scale.set(c.braking?7:5,1,c.braking?9:7);
+    const ts=c.braking?1.5:1;
+    ptGlowL.visible=ptGlowR.visible=true;
+    ptGlowL.position.set(c.x-fx*5.4-rxv*1.7,.1,c.z-fz*5.4-rzv*1.7);
+    ptGlowR.position.set(c.x-fx*5.4+rxv*1.7,.1,c.z-fz*5.4+rzv*1.7);
+    ptGlowL.scale.set(3.5*ts,1,5.5*ts);ptGlowR.scale.set(3.5*ts,1,5.5*ts);
   }else{
-    headL.intensity=headR.intensity=playerTail.intensity=0;
-    headGlow.visible=tailGlow.visible=false;
+    headL.intensity=headR.intensity=ptL.intensity=ptR.intensity=0;
+    headGlow.visible=ptGlowL.visible=ptGlowR.visible=false;
   }
-  /* фары + стоп-сигналы трафика и патрулей */
   for(const rig of carRigs)applyRig(rig);
   let bestCop=null,bd=1e9;
   for(const c of cars)if(c.cop&&!c.dead&&!c.player){
@@ -1394,19 +1520,24 @@ function syncWorld(){
     sirLight.color.set(on?0xff2233:0x2244ff);
     sirLight.intensity=140;
   }else sirLight.intensity=0;
-  if(tlHeadMesh){
-    const g=new THREE.Color(.3,1.6,.55),r=new THREE.Color(1.8,.25,.35);
+  /* светофоры: HDR-головка + пятно на асфальте в цвет активного сигнала */
+  if(tlHeadMesh&&tlGlowMesh){
+    const hg=new THREE.Color(.3,1.8,.6),hr=new THREE.Color(2.0,.25,.35);
+    const gg=new THREE.Color(.15,1.0,.35),gr=new THREE.Color(1.2,.15,.22);
     for(let i=0;i<tlHeadList.length;i++){
-      const h=tlHeadList[i];
-      tlHeadMesh.setColorAt(i,lightGreen(h.axis,h.ci,h.cj)?g:r);
+      const h=tlHeadList[i],green=lightGreen(h.axis,h.ci,h.cj);
+      tlHeadMesh.setColorAt(i,green?hg:hr);
+      tlGlowMesh.setColorAt(i,green?gg:gr);
     }
     tlHeadMesh.instanceColor.needsUpdate=true;
+    tlGlowMesh.instanceColor.needsUpdate=true;
   }
   padBase.material.opacity=.25+.15*Math.sin(t*2.2);
+  doorGlow.material.opacity=.4+.25*Math.sin(t*3);
   padDealer.material.opacity=.25+.15*Math.sin(t*2.6);
 }
-/* ============ КАМЕРА ============ */
-let camCX=player.x,camCZ=player.z,camHcur=112;
+/* ============ КАМЕРА (ближе) ============ */
+let camCX=player.x,camCZ=player.z,camHcur=76;
 function updateCamera(dt){
   if(state==='menu'){
     menuAng+=dt*.06;
@@ -1418,15 +1549,15 @@ function updateCamera(dt){
   let tx,tz,th;
   if(player.inCar&&!player.inCar.dead){
     const c=player.inCar;
-    const lead=clamp(Math.abs(c.speed)*1.2,0,34);
+    const lead=clamp(Math.abs(c.speed)*1.2,0,28);
     tx=c.x+Math.sin(c.angle)*lead;tz=c.z+Math.cos(c.angle)*lead;
-    th=112+Math.abs(c.speed)*2.6;
+    th=76+Math.abs(c.speed)*2.0;
   }else{
     tx=player.x+(player.moving?Math.sin(player.formA)*5:0);
     tz=player.z+(player.moving?Math.cos(player.formA)*5:0);
-    th=112;
+    th=76;
   }
-  th=clamp(th,112,220);
+  th=clamp(th,76,160);
   const k=1-Math.pow(.02,dt);
   camCX=lerp(camCX,tx,k);camCZ=lerp(camCZ,tz,k);
   camHcur=lerp(camHcur,th,1-Math.pow(.05,dt));
@@ -1464,6 +1595,8 @@ function drawHUD(){
     const p=Z(r);if(Math.abs(p)<75){mc.beginPath();mc.moveTo(-75,p);mc.lineTo(75,p);mc.stroke();}
     const q=X(r);if(Math.abs(q)<75){mc.beginPath();mc.moveTo(q,-75);mc.lineTo(q,75);mc.stroke();}
   }
+  mc.strokeStyle='#00f0ff';mc.lineWidth=1.5;
+  mc.strokeRect(X(BASE_OUT.x0),Z(BASE_OUT.z0),52*s,56*s);
   mc.fillStyle='#00f0ff';mc.fillRect(X(BASE.x)-3,Z(BASE.z)-3,6,6);
   mc.fillStyle='#fcee0a';mc.fillRect(X(DEALER.x)-3,Z(DEALER.z)-3,6,6);
   for(const c of cars){
@@ -1517,7 +1650,7 @@ function frame(now){
   else if(state==='menu'){
     for(const car of cars)if(car.ai&&!car.dead&&!car.cop)updateAICar(car,dt);
     separateCars();
-    updatePeds(dt);updateParts(dt);updateLampLights(dt);updateCarRigs(dt);updateFxLights(dt);
+    updatePeds(dt);updateParts(dt);updateLampLights(dt);updateSignLights(dt);updateCarRigs(dt);updateFxLights(dt);
   }
   syncWorld();
   updateCamera(dt);
@@ -1549,9 +1682,9 @@ function resetGame(){
   for(const u of pickups)scene.remove(u.mesh);pickups.length=0;
   parts.length=0;floats.length=0;
   money=0;kills=0;gameTime=0;heat=0;lastCrime=-99;shake=0;hurtT=0;eCd=0;sellCd=0;copSpawnT=0;lastWarn=-99;
-  player.x=BASE.x;player.z=BASE.z+18;player.hp=100;player.ammo=MAG;player.reload=0;player.inCar=null;
+  player.x=BASE.x;player.z=368;player.hp=100;player.ammo=MAG;player.reload=0;player.inCar=null;
   playerH.g.visible=true;
-  camCX=player.x;camCZ=player.z;camHcur=112;
+  camCX=player.x;camCZ=player.z;camHcur=76;
   spawnParked();spawnTraffic(12);
   for(let i=0;i<20;i++)updatePeds(0);
 }

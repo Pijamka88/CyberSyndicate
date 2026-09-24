@@ -69,6 +69,7 @@ display:flex;align-items:center;justify-content:center}
 .mbtn:active{background:rgba(255,255,255,.25)}
 #btnE{right:170px;bottom:60px;width:60px;height:60px}
 #btnR{right:170px;bottom:140px;width:50px;height:50px;font-size:12px}
+#btnF{left:170px;bottom:60px;width:50px;height:50px;font-size:13px}
 </style>
 </head>
 <body>
@@ -89,7 +90,7 @@ display:flex;align-items:center;justify-content:center}
 <div id="timer">00:00</div>
 <div id="starsBox"><div id="stars"><i>★</i><i>★</i><i>★</i><i>★</i><i>★</i></div></div>
 <div id="baseHud">УКРЫТИЕ — РОЗЫСК СНИЖАЕТСЯ</div>
-<div id="hint">WASD — движение · МЫШЬ — прицел · ЛКМ — огонь · E — угон/выход · R — перезарядка · SHIFT — бег · SPACE — тормоз · ESC — пауза</div>
+<div id="hint">WASD — движение · МЫШЬ — прицел · ЛКМ — огонь · E — угон/выход · R — перезарядка · F — магазин/автосалон · SHIFT — бег · SPACE — тормоз · ESC — пауза</div>
 <div id="ammobox">ПАТРОНЫ: 12/12</div>
 
 <div id="mobileUI">
@@ -97,6 +98,7 @@ display:flex;align-items:center;justify-content:center}
   <div class="joystick" id="joyAim"><div class="joystick-inner" id="joyAimInner"></div></div>
   <div class="mbtn" id="btnE">E</div>
   <div class="mbtn" id="btnR">R</div>
+  <div class="mbtn" id="btnF">F</div>
 </div>
 
 <div id="menu" class="ov">
@@ -105,9 +107,11 @@ display:flex;align-items:center;justify-content:center}
     <h2>VOXEL CITY // 2077</h2>
     <button id="btnStart">ПОГНАЛИ</button>
     <p class="ctrl">Вид сверху, как в GTA2 · WASD — движение · мышь — прицел · ЛКМ — огонь<br>
-    E — угон/выход из машины · R — перезарядка · SHIFT — бег · SPACE — тормоз · ESC — пауза<br><br>
-    База — огороженный комплекс с воротами: зайди в здание через вход,<br>
-    там лечит и сбрасывает розыск · жёлтая зона — приёмка угнанных тачек</p>
+    E — угон/выход из машины · R — перезарядка · F — покупка · SHIFT — бег · SPACE — тормоз · ESC — пауза<br><br>
+    <span style="color:#5ffbf1">Голубое здание</span> — база: вход внутрь, там лечит и сбрасывает розыск<br>
+    <span style="color:#4dff88">Зелёное здание</span> — магазин: патроны $30 (F)<br>
+    <span style="color:#ff4dc4">Розовое здание</span> — автосалон: купить тачку $300 (F)<br>
+    <span style="color:#fcee0a">Жёлтая зона</span> — скупка угнанных тачек (без розыска)</p>
   </div>
 </div>
 <div id="pause" class="ov" style="display:none">
@@ -166,13 +170,18 @@ const DIRS=[{x:1,z:0},{x:0,z:1},{x:-1,z:0},{x:0,z:-1}];
 const DIRA=[Math.PI/2,0,-Math.PI/2,Math.PI];
 const MAG=12,RELOAD_T=1.3;
 const CAR_HP=40,COP_CAR_HP=70;
-/* база: комплекс. Двор: x 352..404, z 322..378.
-   Здание: x 364..392, z 339..361, вход-дверь с юга x 374..382 */
+const AMMO_COST=30,CAR_COST=300;
+/* здания: база (укрытие), магазин (патроны), автосалон (покупка тачки) */
 const BASE={x:378,z:350};
-const BASE_OUT={x0:352,z0:322,x1:404,z1:378};
-function inBaseRect(x,z){return x>BASE_OUT.x0&&x<BASE_OUT.x1&&z>BASE_OUT.z0&&z<BASE_OUT.z1;}
+const BASE_R={x0:364,z0:339,x1:392,z1:361};
+const SHOP={x:586,z:166};
+const SHOP_R={x0:578,z0:158,x1:594,z1:174};
+const SALON={x:306,z:306};
+const SALON_R={x0:298,z0:298,x1:314,z1:314};
+function inRect(r,x,z){return x>r.x0&&x<r.x1&&z>r.z0&&z<r.z1;}
+const inBaseRect=(x,z)=>inRect(BASE_R,x,z);
 const DEALER={x:630,z:215,r:13};
-const specialBlocks=new Set(['2,2','4,1']);
+const specialBlocks=new Set(['2,2','4,1']); /* кварталы под магазин и автосалон */
 function laneOff(d){return d===0?{x:0,z:LANE}:d===1?{x:-LANE,z:0}:d===2?{x:0,z:-LANE}:{x:LANE,z:0};}
 function nearestLine(v){let best=R[0],bd=1e9;for(const r of R){const d=Math.abs(v-r);if(d<bd){bd=d;best=r;}}return best;}
 function lightGreen(axis,ci,cj){const ph=(gameTime/7+ci*0.37+cj*0.53)%1;return axis===(ph<0.55?0:1);}
@@ -226,7 +235,8 @@ for(let i=0;i<GRID;i++){blockPark[i]=[];for(let j=0;j<GRID;j++)
 blockPark[i][j]=specialBlocks.has(i+','+j)?false:srng()<0.28;}
 
 function nearPad(x,z,m){
-  if(x>BASE_OUT.x0-4-m&&x<BASE_OUT.x1+4+m&&z>BASE_OUT.z0-4-m&&z<BASE_OUT.z1+4+m)return true;
+  for(const r of[BASE_R,SHOP_R,SALON_R])
+    if(x>r.x0-4-m&&x<r.x1+4+m&&z>r.z0-4-m&&z<r.z1+4+m)return true;
   return dist2(x,z,DEALER.x,DEALER.z)<DEALER.r+m;
 }
 
@@ -279,11 +289,7 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
       }
       continue;
     }
-    if(specialBlocks.has(i+','+j)){
-      if(i===2)addBuilding(i*CELL+26,j*CELL+26,5,4,6,'#243248',0x55e8ff);
-      else addBuilding(i*CELL+26,j*CELL+26,4,4,5,'#3a3018',0xffd24a);
-      continue;
-    }
+    if(specialBlocks.has(i+','+j))continue; /* магазин/автосалон строим сами ниже */
     const placed=[];
     const spots=[[x0,z0,(x1-x0)*.5,(z1-z0)*.5],[x1-(x1-x0)*.5,z1-(z1-z0)*.5,(x1-x0)*.5,(z1-z0)*.5]];
     for(const s of spots){
@@ -314,8 +320,8 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
       poolsA.push({x:lx,z:lz});
     }
   }
-  /* СВЕТОФОРЫ: по столбу на центре каждой стоп-линии (4 подъезда
-     к каждому перекрёстку) + световое пятно на асфальте в цвет сигнала */
+  /* СВЕТОФОРЫ: по столбу на центре каждой стоп-линии (4 подъезда),
+     со световым пятном на асфальте в цвет сигнала */
   for(let i=0;i<GRID;i++)for(let j=0;j<GRID;j++){
     const cx=i*CELL,cz=j*CELL,sl=AW+8;
     for(const s of[-1,1]){
@@ -335,38 +341,44 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
   }
 })();
 
-/* ============ БАЗА: здание со входом + стены двора ============ */
-const trimCyan=new THREE.Color(0,1.5,1.8);
-function addWallSeg(x0,z0,x1,z1,hUnits,trim){
+/* ============ ЗДАНИЯ: база / магазин / автосалон ============ */
+function addWallSeg(x0,z0,x1,z1,hUnits,trim,wallHex){
   const horiz=(z1-z0)<=(x1-x0);
   const len=horiz?x1-x0:z1-z0;
   const n=Math.max(1,Math.round(len/2));
-  const col=new THREE.Color(0x46506a);
+  const col=new THREE.Color(wallHex||0x46506a);
   for(let i=0;i<n;i++){
     const cx=horiz?x0+1+i*2:(x0+x1)/2;
     const cz=horiz?(z0+z1)/2:z0+1+i*2;
     for(let y=0;y<hUnits;y++)
       solids.push({x:cx,y:1+y*2,z:cz,sx:2,sy:2,sz:2,c:col.clone().multiplyScalar(sRand(.8,1.1))});
-    if(trim&&i%2===0)signsArr.push({x:cx,y:hUnits*2+1,z:cz,sx:2.3,sy:1,sz:2.3,c:trimCyan});
+    if(trim&&i%2===0)signsArr.push({x:cx,y:hUnits*2+1,z:cz,sx:2.3,sy:1,sz:2.3,c:trim});
   }
   boxes.push({x:(x0+x1)/2,z:(z0+z1)/2,hw:Math.max(1,(x1-x0)/2),hd:Math.max(1,(z1-z0)/2),h:hUnits*2});
 }
-(function buildBase(){
-  /* здание базы: стены с проёмом-входом с юга (x 374..382) */
-  addWallSeg(364,339,392,341,6,true);          /* север */
-  addWallSeg(364,359,374,361,6,true);          /* юг, слева от входа */
-  addWallSeg(382,359,392,361,6,true);          /* юг, справа от входа */
-  addWallSeg(364,341,366,359,6,true);          /* запад */
-  addWallSeg(390,341,392,359,6,true);          /* восток */
-  /* периметровая стена двора с воротами с юга (x 372..388) */
-  addWallSeg(352,322,404,324,3,true);
-  addWallSeg(352,324,354,378,3,true);
-  addWallSeg(402,324,404,378,3,true);
-  addWallSeg(352,376,372,378,3,true);
-  addWallSeg(388,376,404,378,3,true);
-  /* неоновые маячки у ворот и входа */
-  for(const gx of[373,375,385,387])signsArr.push({x:gx,y:4,z:377,sx:1,sy:8,sz:1,c:new THREE.Color(1.9,1.8,.15)});
-  for(const dx of[375,381])signsArr.push({x:dx,y:5,z:360,sx:1,sy:10,sz:1,c:trimCyan});
+const cCyan=new THREE.Color(0,1.5,1.8),cGreen=new THREE.Color(.2,1.9,.8),cPink=new THREE.Color(1.9,.35,1.2);
+(function buildSpecial(){
+  /* БАЗА: здание с входом с юга (x 374..382), циановая окантовка */
+  addWallSeg(364,339,392,341,6,cCyan,0x3e5060);
+  addWallSeg(364,359,374,361,6,cCyan,0x3e5060);
+  addWallSeg(382,359,392,361,6,cCyan,0x3e5060);
+  addWallSeg(364,341,366,359,6,cCyan,0x3e5060);
+  addWallSeg(390,341,392,359,6,cCyan,0x3e5060);
+  for(const dx of[375,381])signsArr.push({x:dx,y:5,z:360,sx:1,sy:10,sz:1,c:cCyan});
+  /* МАГАЗИН: вход с юга (x 582..590), зелёная окантовка */
+  addWallSeg(578,158,594,160,4,cGreen,0x3c4a3e);
+  addWallSeg(578,172,582,174,4,cGreen,0x3c4a3e);
+  addWallSeg(590,172,594,174,4,cGreen,0x3c4a3e);
+  addWallSeg(578,160,580,172,4,cGreen,0x3c4a3e);
+  addWallSeg(592,160,594,172,4,cGreen,0x3c4a3e);
+  for(const dx of[583,589])signsArr.push({x:dx,y:3.4,z:173,sx:1,sy:7,sz:1,c:cGreen});
+  /* АВТОСАЛОН: вход с юга (x 302..310), розовая окантовка */
+  addWallSeg(298,298,314,300,4,cPink,0x4a3a50);
+  addWallSeg(298,312,302,314,4,cPink,0x4a3a50);
+  addWallSeg(310,312,314,314,4,cPink,0x4a3a50);
+  addWallSeg(298,300,300,312,4,cPink,0x4a3a50);
+  addWallSeg(312,300,314,312,4,cPink,0x4a3a50);
+  for(const dx of[303,309])signsArr.push({x:dx,y:3.4,z:313,sx:1,sy:7,sz:1,c:cPink});
 })();
 
 /* земля с текстурой дороги (пиксель = мировая координата, без сдвигов) */
@@ -379,8 +391,10 @@ function makeGroundTexture(){
     g.fillStyle=blockPark[i][j]?'#1d3a26':'#1a2130';
     g.fillRect(X(i*CELL+15),X(j*CELL+15),(CELL-30)*k,(CELL-30)*k);
   }
-  g.fillStyle='#18212e';g.fillRect(X(BASE_OUT.x0),X(BASE_OUT.z0),52*k,56*k);
+  /* полы спец-зданий */
   g.fillStyle='#1e2736';g.fillRect(X(366),X(341),24*k,18*k);
+  g.fillStyle='#1e2f26';g.fillRect(X(580),X(160),12*k,12*k);
+  g.fillStyle='#2c2030';g.fillRect(X(300),X(300),12*k,12*k);
   g.fillStyle='#3d4454';
   for(let i=0;i<=GRID;i++){g.fillRect(0,X(i*CELL-15),S,30*k);g.fillRect(X(i*CELL-15),0,30*k,S);}
   g.fillStyle='#2b313d';
@@ -410,7 +424,10 @@ function makeGroundTexture(){
     g.fillRect(X(i*CELL+st*2.2-.8),X(j*CELL+s*(AW+3)-2.8),1.6*k,5.6*k);
     g.fillRect(X(i*CELL+s*(AW+3)-2.8),X(j*CELL+st*2.2-.8),5.6*k,1.6*k);
   }
+  /* зоны: база / магазин / салон / скупка */
   g.fillStyle='rgba(0,240,255,.4)';g.fillRect(X(BASE.x-10),X(BASE.z-8),20*k,16*k);
+  g.fillStyle='rgba(60,255,140,.45)';g.fillRect(X(SHOP.x-8),X(SHOP.z-8),16*k,16*k);
+  g.fillStyle='rgba(255,77,196,.45)';g.fillRect(X(SALON.x-8),X(SALON.z-8),16*k,16*k);
   g.fillStyle='rgba(252,238,10,.4)';g.fillRect(X(DEALER.x-12),X(DEALER.z-12),24*k,24*k);
   const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=4;return t;
 }
@@ -440,7 +457,6 @@ const unitBox=new THREE.BoxGeometry(1,1,1);
 const glowPlaneGeo=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);
 mkInst(solids,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(wins,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
-/* неоновые вывески + неоновая окантовка базы (HDR-цвета для bloom) */
 mkInst(signsArr,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
 mkInst(trunks,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(leaves,unitBox,new THREE.MeshLambertMaterial(),true);
@@ -452,16 +468,25 @@ const tlGlowMesh=mkInst(tlGlows,glowPlaneGeo,
   new THREE.MeshBasicMaterial({map:radialTex('255,255,255'),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),true);
 mkInst(poolsA,new THREE.PlaneGeometry(20,20).rotateX(-Math.PI/2),
   new THREE.MeshBasicMaterial({map:radialTex('255,208,140'),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),false);
-const padBase=new THREE.Mesh(new THREE.PlaneGeometry(20,15).rotateX(-Math.PI/2),
-  new THREE.MeshBasicMaterial({color:0x00f0ff,transparent:true,opacity:.35,depthWrite:false}));
-padBase.position.set(BASE.x,.12,BASE.z);scene.add(padBase);
-/* светящаяся полоса-вход в здание */
-const doorGlow=new THREE.Mesh(new THREE.PlaneGeometry(8,3).rotateX(-Math.PI/2),
-  new THREE.MeshBasicMaterial({color:new THREE.Color(0,1.4,1.6),transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
-doorGlow.position.set(378,.13,360.2);scene.add(doorGlow);
-const padDealer=new THREE.Mesh(new THREE.PlaneGeometry(24,24).rotateX(-Math.PI/2),
-  new THREE.MeshBasicMaterial({color:0xfcee0a,transparent:true,opacity:.35,depthWrite:false}));
-padDealer.position.set(DEALER.x,.12,DEALER.z);scene.add(padDealer);
+/* светящиеся площадки-зоны */
+function mkPad(x,z,w,h,hex){
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h).rotateX(-Math.PI/2),
+    new THREE.MeshBasicMaterial({color:hex,transparent:true,opacity:.35,depthWrite:false}));
+  m.position.set(x,.12,z);scene.add(m);return m;
+}
+const padBase=mkPad(BASE.x,BASE.z,20,15,0x00f0ff);
+const padShop=mkPad(SHOP.x,SHOP.z,14,14,0x3cff8c);
+const padSalon=mkPad(SALON.x,SALON.z,14,14,0xff4dc4);
+const padDealer=mkPad(DEALER.x,DEALER.z,24,24,0xfcee0a);
+/* светящиеся полосы-входы */
+function mkDoorGlow(x,z,hex){
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(8,3).rotateX(-Math.PI/2),
+    new THREE.MeshBasicMaterial({color:hex,transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
+  m.position.set(x,.13,z);scene.add(m);return m;
+}
+const doorGlow=mkDoorGlow(378,360.2,cCyan);
+const shopDoorGlow=mkDoorGlow(586,173.2,cGreen);
+const salonDoorGlow=mkDoorGlow(306,313.2,cPink);
 
 /* ============ РЕАЛЬНЫЕ ИСТОЧНИКИ СВЕТА ============ */
 const lampLights=[];
@@ -481,8 +506,7 @@ function updateLampLights(dt){
     else L.intensity=0;
   }
 }
-/* СВЕЧЕНИЕ НЕОНОВЫХ ВЫВЕСОК: цветные точечные светильники
-   на ближайших к игроку вывесках — льют свой цвет на стену и улицу */
+/* СВЕЧЕНИЕ НЕОНОВЫХ ВЫВЕСОК */
 const signLights=[];
 {const N=isMobile?1:3;
 for(let i=0;i<N;i++){const L=new THREE.PointLight(0xffffff,0,30,1.9);scene.add(L);signLights.push(L);}}
@@ -492,7 +516,7 @@ function updateSignLights(dt){
   const px=player.inCar?player.inCar.x:player.x,pz=player.inCar?player.inCar.z:player.z;
   const arr=[];
   for(const s of signsArr){
-    if(s.sy>6)continue; /* окантовку базы и маячки пропускаем — только вывески */
+    if(s.sy>6)continue;
     const d=(s.x-px)*(s.x-px)+(s.z-pz)*(s.z-pz);
     if(d<130*130)arr.push({s,d});
   }
@@ -504,8 +528,7 @@ function updateSignLights(dt){
   }
 }
 
-/* ФАРЫ И СТОП-СИГНАЛЫ ВСЕХ МАШИН: ДВА прожектора фар +
-   ДВА красных стоп-фонаря (по одному с каждой стороны) */
+/* ФАРЫ И СТОП-СИГНАЛЫ ВСЕХ МАШИН: ДВА прожектора + ДВА стоп-фонаря */
 const headGlowMat=new THREE.MeshBasicMaterial({map:radialTex('255,235,180'),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
 const tailGlowMat=new THREE.MeshBasicMaterial({map:radialTex('255,50,40'),transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
 const carRigs=[];
@@ -550,7 +573,6 @@ function applyRig(rig){
   rig.hR.position.set(c.x+fx*4.5+rxv*1.5,1.8,c.z+fz*4.5+rzv*1.5);
   rig.hL.target.position.set(c.x+fx*30-rxv*1.5,0,c.z+fz*30-rzv*1.5);
   rig.hR.target.position.set(c.x+fx*30+rxv*1.5,0,c.z+fz*30+rzv*1.5);
-  /* два стоп-фонаря сзади, слева и справа */
   const bx=c.x-fx*4.7,bz=c.z-fz*4.7;
   rig.tL.position.set(bx-rxv*1.6,1.6,bz-rzv*1.6);
   rig.tR.position.set(bx+rxv*1.6,1.6,bz+rzv*1.6);
@@ -697,7 +719,7 @@ musicEl.volume=.35;
 
 /* ============ СОСТОЯНИЕ ============ */
 let state='menu',gameTime=0,money=0,kills=0,heat=0,lastCrime=-99,shake=0,hurtT=0,
-eCd=0,sellCd=0,copSpawnT=0,menuAng=0,lastWarn=-99;
+eCd=0,sellCd=0,buyCd=0,copSpawnT=0,menuAng=0,lastWarn=-99;
 
 /* ============ ВВОД ============ */
 if(isMobile){document.getElementById('mobileUI').classList.add('active');
@@ -708,6 +730,7 @@ addEventListener('keydown',e=>{
   if(e.code==='Space')e.preventDefault();
   if(e.code==='KeyE')tryEnterExit();
   if(e.code==='KeyR')startReload();
+  if(e.code==='KeyF')tryBuy();
   if(e.code==='Escape'||e.code==='KeyP')togglePause();
 });
 addEventListener('keyup',e=>keys[e.code]=false);
@@ -733,7 +756,7 @@ function setupJoystick(el,inner,joy){
 if(isMobile){
   setupJoystick(document.getElementById('joyMove'),document.getElementById('joyMoveInner'),joyMove);
   setupJoystick(document.getElementById('joyAim'),document.getElementById('joyAimInner'),joyAim);
-  for(const[id,fn]of[['btnE',tryEnterExit],['btnR',startReload]]){
+  for(const[id,fn]of[['btnE',tryEnterExit],['btnR',startReload],['btnF',tryBuy]]){
     const btn=document.getElementById(id);
     btn.addEventListener('touchstart',e=>{e.preventDefault();if(state==='play')fn();},{passive:false});
   }
@@ -831,7 +854,7 @@ function makePed(x,z){
   scene.add(h.g);
   const p={x:clamp(x,10,WORLD-10),z:clamp(z,10,WORLD-10),a:rand(0,TAU),h,phase:rand(0,9),
     turnT:rand(1,4),panic:0,dead:false,deadT:0,fall:0};
-  collideBoxes(p,.8); /* пешеход никогда не спавнится внутри стен */
+  collideBoxes(p,.8);
   peds.push(p);return p;
 }
 function makeCop(x,z){
@@ -843,7 +866,7 @@ function makeCop(x,z){
   cops.push(c);
 }
 
-const player={x:BASE.x,z:368,a:Math.PI,hp:100,ammo:MAG,reload:0,fireCd:0,inCar:null,moving:false,phase:0,formA:0};
+const player={x:BASE.x,z:366,a:Math.PI,hp:100,ammo:MAG,reload:0,fireCd:0,inCar:null,moving:false,phase:0,formA:0};
 const playerH=makeHuman(0xfcee0a,0x1a1d26,0xd9a066,0x14161c);
 const gun=new THREE.Mesh(new THREE.BoxGeometry(.35,.5,1.5),new THREE.MeshLambertMaterial({color:0x181c26}));
 gun.position.set(.86,2.3,.75);playerH.g.add(gun);
@@ -1192,9 +1215,6 @@ function updatePlayerCar(car,dt){
   car.x+=Math.sin(car.angle)*car.speed*dt;
   car.z+=Math.cos(car.angle)*car.speed*dt;
   collideBoxes(car,5);
-  /* КЛЮЧЕВОЙ ФИКС ТЕЛЕПОРТА: позиция игрока всегда синхронна машине.
-     При выходе игрок гарантированно оказывается рядом с машиной,
-     а не там, где садился в неё */
   player.x=car.x;player.z=car.z;
   if(dist2(ox,oz,car.x,car.z)<Math.abs(car.speed)*dt*.5&&Math.abs(car.speed)>7){
     car.speed*=-.35;car.braking=true;
@@ -1220,6 +1240,45 @@ function updatePlayerCar(car,dt){
   }
 }
 
+/* ============ ПОКУПКИ: магазин / автосалон (F) ============ */
+function tryBuy(){
+  if(state!=='play'||buyCd>0)return;
+  const px=player.x,pz=player.z;
+  if(dist2(px,pz,SHOP.x,SHOP.z)<9){
+    buyCd=.5;
+    if(money>=AMMO_COST){
+      money-=AMMO_COST;player.ammo=MAG;player.reload=0;
+      floatAt(px,4,pz,'ПАТРОНЫ ПОПОЛНЕНЫ -'+AMMO_COST+'$','#4dff88');
+      sSell();
+    }else floatAt(px,4,pz,'НЕ ХВАТАЕТ ДЕНЕГ','#ff003c');
+    return;
+  }
+  if(dist2(px,pz,SALON.x,SALON.z)<9){
+    buyCd=.5;
+    if(money>=CAR_COST){
+      /* ищем свободное место для новой тачки перед салоном */
+      let spot=null;
+      outer:
+      for(const dz of[9,13,17]){
+        for(const dx of[-6,0,6]){
+          const sx=SALON.x+dx,sz=SALON.z+dz;
+          if(pointInBoxes(sx,sz,5))continue;
+          let free=true;
+          for(const o of cars)if(!o.dead&&dist2(sx,sz,o.x,o.z)<12){free=false;break;}
+          if(free){spot={x:sx,z:sz};break outer;}
+        }
+      }
+      if(!spot){floatAt(px,4,pz,'НЕТ МЕСТА У ВЫХОДА','#ff003c');return;}
+      money-=CAR_COST;
+      const car=makeCar(spot.x,spot.z,0,CAR_COLORS[sri(8)],false);
+      car.parked=true;cars.push(car);
+      floatAt(px,4,pz,'ТАЧКА КУПЛЕНА -'+CAR_COST+'$','#ff4dc4');
+      floatAt(spot.x,5,spot.z,'E — СЕСТЬ ЗА РУЛЬ','#ff4dc4');
+      sSell();
+    }else floatAt(px,4,pz,'НЕ ХВАТАЕТ ДЕНЕГ','#ff003c');
+  }
+}
+
 /* ============ УГОН / ВЫХОД ============ */
 function tryEnterExit(){
   if(state!=='play'||eCd>0)return;eCd=.35;
@@ -1234,7 +1293,6 @@ function tryEnterExit(){
   if(wasCop){addHeat(1);floatAt(best.x,5,best.z,'УГОН ПОЛИЦИИ! +★','#ff003c');}
   else if(wasAI){
     addHeat(.7);
-    /* высаживаем водителя рядом, выталкиваем из стен */
     const np=makePed(best.x+Math.sin(best.angle+Math.PI/2)*3,best.z+Math.cos(best.angle+Math.PI/2)*3);
     np.panic=3;np.a=Math.atan2(np.z-best.z,np.x-best.x);
     sDoor();scare(best.x,best.z,30);
@@ -1244,9 +1302,6 @@ function tryEnterExit(){
     sDoor();
   }
 }
-/* ВЫХОД ИЗ МАШИНЫ: полный круг из 12 направлений на 5 нарастающих
-   радиусах; если ничего не нашли — ставим на место машины и даём
-   коллизиям вытолкнуть. Вернуться "в другой конец карты" невозможно. */
 function exitCar(){
   const car=player.inCar;if(!car)return;
   car.player=false;car.parked=true;car.speed=0;car.braking=false;
@@ -1273,6 +1328,7 @@ function exitCar(){
 
 /* ============ ЗАКОН ============ */
 function updateLaw(dt){
+  if(buyCd>0)buyCd-=dt;
   const inBase=inBaseRect(player.x,player.z);
   if(heat>0){
     const noCrime=gameTime-lastCrime>12;
@@ -1482,7 +1538,6 @@ function syncWorld(){
   for(const c of cops)if(!c.dead)putShadow(c.x,c.z,3);
   if(!player.inCar)putShadow(player.x,player.z,3);
   shadowMesh.count=si;shadowMesh.instanceMatrix.needsUpdate=true;
-  /* машина игрока: 2 прожектора фар + 2 красных стоп-фонаря */
   if(player.inCar&&!player.inCar.dead){
     const c=player.inCar;
     const fx=Math.sin(c.angle),fz=Math.cos(c.angle);
@@ -1520,7 +1575,6 @@ function syncWorld(){
     sirLight.color.set(on?0xff2233:0x2244ff);
     sirLight.intensity=140;
   }else sirLight.intensity=0;
-  /* светофоры: HDR-головка + пятно на асфальте в цвет активного сигнала */
   if(tlHeadMesh&&tlGlowMesh){
     const hg=new THREE.Color(.3,1.8,.6),hr=new THREE.Color(2.0,.25,.35);
     const gg=new THREE.Color(.15,1.0,.35),gr=new THREE.Color(1.2,.15,.22);
@@ -1532,11 +1586,13 @@ function syncWorld(){
     tlHeadMesh.instanceColor.needsUpdate=true;
     tlGlowMesh.instanceColor.needsUpdate=true;
   }
-  padBase.material.opacity=.25+.15*Math.sin(t*2.2);
-  doorGlow.material.opacity=.4+.25*Math.sin(t*3);
-  padDealer.material.opacity=.25+.15*Math.sin(t*2.6);
+  const pl=.22+.13*Math.sin(t*2.4);
+  padBase.material.opacity=pl;padShop.material.opacity=pl;
+  padSalon.material.opacity=pl;padDealer.material.opacity=pl;
+  const dl=.4+.25*Math.sin(t*3);
+  doorGlow.material.opacity=dl;shopDoorGlow.material.opacity=dl;salonDoorGlow.material.opacity=dl;
 }
-/* ============ КАМЕРА (ближе) ============ */
+/* ============ КАМЕРА ============ */
 let camCX=player.x,camCZ=player.z,camHcur=76;
 function updateCamera(dt){
   if(state==='menu'){
@@ -1595,10 +1651,11 @@ function drawHUD(){
     const p=Z(r);if(Math.abs(p)<75){mc.beginPath();mc.moveTo(-75,p);mc.lineTo(75,p);mc.stroke();}
     const q=X(r);if(Math.abs(q)<75){mc.beginPath();mc.moveTo(q,-75);mc.lineTo(q,75);mc.stroke();}
   }
-  mc.strokeStyle='#00f0ff';mc.lineWidth=1.5;
-  mc.strokeRect(X(BASE_OUT.x0),Z(BASE_OUT.z0),52*s,56*s);
-  mc.fillStyle='#00f0ff';mc.fillRect(X(BASE.x)-3,Z(BASE.z)-3,6,6);
-  mc.fillStyle='#fcee0a';mc.fillRect(X(DEALER.x)-3,Z(DEALER.z)-3,6,6);
+  const sq=(x,z,c)=>{mc.fillStyle=c;mc.fillRect(X(x)-3,Z(z)-3,6,6);};
+  sq(BASE.x,BASE.z,'#00f0ff');
+  sq(SHOP.x,SHOP.z,'#4dff88');
+  sq(SALON.x,SALON.z,'#ff4dc4');
+  sq(DEALER.x,DEALER.z,'#fcee0a');
   for(const c of cars){
     const x=X(c.x),z=Z(c.z);
     if(Math.abs(x)<72&&Math.abs(z)<72){
@@ -1681,8 +1738,8 @@ function resetGame(){
   for(const b of bullets){b.mesh.visible=false;freeB.push(b.mesh);}bullets.length=0;
   for(const u of pickups)scene.remove(u.mesh);pickups.length=0;
   parts.length=0;floats.length=0;
-  money=0;kills=0;gameTime=0;heat=0;lastCrime=-99;shake=0;hurtT=0;eCd=0;sellCd=0;copSpawnT=0;lastWarn=-99;
-  player.x=BASE.x;player.z=368;player.hp=100;player.ammo=MAG;player.reload=0;player.inCar=null;
+  money=0;kills=0;gameTime=0;heat=0;lastCrime=-99;shake=0;hurtT=0;eCd=0;sellCd=0;buyCd=0;copSpawnT=0;lastWarn=-99;
+  player.x=BASE.x;player.z=366;player.hp=100;player.ammo=MAG;player.reload=0;player.inCar=null;
   playerH.g.visible=true;
   camCX=player.x;camCZ=player.z;camHcur=76;
   spawnParked();spawnTraffic(12);

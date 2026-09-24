@@ -171,7 +171,6 @@ const DIRA=[Math.PI/2,0,-Math.PI/2,Math.PI];
 const MAG=12,RELOAD_T=1.3;
 const CAR_HP=40,COP_CAR_HP=70;
 const AMMO_COST=30,CAR_COST=300;
-/* здания: база (укрытие), магазин (патроны), автосалон (покупка тачки) */
 const BASE={x:378,z:350};
 const BASE_R={x0:364,z0:339,x1:392,z1:361};
 const SHOP={x:586,z:166};
@@ -181,7 +180,7 @@ const SALON_R={x0:298,z0:298,x1:314,z1:314};
 function inRect(r,x,z){return x>r.x0&&x<r.x1&&z>r.z0&&z<r.z1;}
 const inBaseRect=(x,z)=>inRect(BASE_R,x,z);
 const DEALER={x:630,z:215,r:13};
-const specialBlocks=new Set(['2,2','4,1']); /* кварталы под магазин и автосалон */
+const specialBlocks=new Set(['2,2','4,1']);
 function laneOff(d){return d===0?{x:0,z:LANE}:d===1?{x:-LANE,z:0}:d===2?{x:0,z:-LANE}:{x:LANE,z:0};}
 function nearestLine(v){let best=R[0],bd=1e9;for(const r of R){const d=Math.abs(v-r);if(d<bd){bd=d;best=r;}}return best;}
 function lightGreen(axis,ci,cj){const ph=(gameTime/7+ci*0.37+cj*0.53)%1;return axis===(ph<0.55?0:1);}
@@ -215,7 +214,7 @@ let composer=null;
 if(!isMobile){
   composer=new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene,camera));
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.8,0.55,0.5));
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.9,0.5,0.45));
   composer.addPass(new OutputPass());
 }
 resize();
@@ -229,10 +228,18 @@ scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0xcfdaff,size:1.7,s
 
 /* ============ ГЕНЕРАЦИЯ ГОРОДА ============ */
 const boxes=[];
-const solids=[],wins=[],signsArr=[],trunks=[],leaves=[],lampPoles=[],lampHeads=[],poolsA=[],tlPoles=[],tlHeadList=[],tlGlows=[];
-const blockPark=[];
-for(let i=0;i<GRID;i++){blockPark[i]=[];for(let j=0;j<GRID;j++)
-blockPark[i][j]=specialBlocks.has(i+','+j)?false:srng()<0.28;}
+const solids=[],wins=[],signsArr=[],trunks=[],leaves=[],lampPoles=[],lampHeads=[],poolsA=[],
+tlPoles=[],tlHeadList=[],tlGlows=[],benches=[],lotRects=[],pondList=[],swimPools=[];
+const blockPark=[],blockLot=[];
+for(let i=0;i<GRID;i++){
+  blockPark[i]=[];blockLot[i]=[];
+  for(let j=0;j<GRID;j++){
+    const key=specialBlocks.has(i+','+j);
+    const r=srng();
+    blockPark[i][j]=key?false:r<0.24;
+    blockLot[i][j]=key||blockPark[i][j]?false:r<0.36;
+  }
+}
 
 function nearPad(x,z,m){
   for(const r of[BASE_R,SHOP_R,SALON_R])
@@ -240,9 +247,9 @@ function nearPad(x,z,m){
   return dist2(x,z,DEALER.x,DEALER.z)<DEALER.r+m;
 }
 
-const palette=['#6e6250','#5c5850','#756752','#2e3a58','#3d2f52','#254652','#6d5f4a','#3a4a38','#6b4650','#4a5a3a'];
-const signCols=[new THREE.Color(0,1.5,1.8),new THREE.Color(1.8,.35,.9),new THREE.Color(1.9,1.8,.15),
-new THREE.Color(1.2,.8,1.9),new THREE.Color(1.9,.1,.4)];
+const palette=['#6e6250','#5c5850','#756752','#2e3a58','#3d2f52','#254652','#6d5f4a','#3a4a38',
+'#6b4650','#4a5a3a','#4a3a2e','#2f4a44','#54405e','#333850','#5e3a3a','#3a5258'];
+const signCols=[new THREE.Color(2.5,2.3,.25),new THREE.Color(2.6,.55,1.75),new THREE.Color(.25,2.4,2.6)];
 const winCols=[new THREE.Color(1.35,1.05,.55),new THREE.Color(.55,1.15,1.4),new THREE.Color(1.3,.6,.9)];
 
 function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
@@ -265,11 +272,25 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
   const nk=2+(srng()*3|0);
   for(let k=0;k<nk;k++)solids.push({x:bx+sRand(VS,w-VS),y:bh*VS+VS*.25,z:bz+sRand(VS,d-VS),
     sx:VS*sRand(.4,.7),sy:VS*sRand(.3,.5),sz:VS*sRand(.4,.7),c:base.clone().multiplyScalar(.6)});
-  if(!winCol&&srng()<.55){
-    const h=sRand(10,26),cy=sRand(bh*VS*.35,bh*VS*.6);
-    const sc=signCols[(srng()*signCols.length)|0];
-    if(srng()<.5)signsArr.push({x:bx-1.3,y:cy,z:bz+sRand(0,d),sx:1.7,sy:h,sz:1.7,c:sc});
-    else signsArr.push({x:bx+sRand(0,w),y:cy,z:bz-1.3,sx:1.7,sy:h,sz:1.7,c:sc});
+  if(!winCol){
+    const cnt=1+(srng()*2|0);
+    for(let s=0;s<cnt;s++){
+      const sc=signCols[(srng()*3)|0];
+      if(srng()<.5){
+        const h=sRand(10,24),cy=sRand(bh*VS*.3,bh*VS*.6);
+        if(srng()<.5)signsArr.push({x:bx-1.4,y:cy,z:bz+sRand(2,Math.max(3,d-2)),sx:1.8,sy:h,sz:1.8,c:sc});
+        else signsArr.push({x:bx+sRand(2,Math.max(3,w-2)),y:cy,z:bz-1.4,sx:1.8,sy:h,sz:1.8,c:sc});
+      }else{
+        const len=sRand(10,Math.max(11,Math.min(w,d)-2)),cy=sRand(bh*VS*.3,bh*VS*.7);
+        if(srng()<.5)signsArr.push({x:bx-1.4,y:cy,z:bz+d/2-len/2+sRand(0,Math.max(.1,d-len)),sx:1.8,sy:2.6,sz:len,c:sc});
+        else signsArr.push({x:bx+w/2-len/2+sRand(0,Math.max(.1,w-len)),y:cy,z:bz-1.4,sx:len,sy:2.6,sz:1.8,c:sc});
+      }
+    }
+    if(srng()<.35){
+      const sc=signCols[(srng()*3)|0];
+      const bl=Math.min(w-4,sRand(14,26));
+      signsArr.push({x:bx+w/2,y:bh*VS+2.6,z:bz+d/2,sx:bl,sy:3.2,sz:1.4,c:sc});
+    }
   }
 }
 
@@ -277,19 +298,35 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
   for(let i=0;i<GRID;i++)for(let j=0;j<GRID;j++){
     const x0=i*CELL+16,x1=(i+1)*CELL-16,z0=j*CELL+16,z1=(j+1)*CELL-16;
     if(blockPark[i][j]){
+      let pond=null;
+      if(srng()<.55){
+        pond={x:sRand(x0+26,x1-26),z:sRand(z0+22,z1-22),rx:sRand(10,16),rz:sRand(8,13)};
+        pondList.push(pond);
+      }
       const n=7+(srng()*8|0);
       for(let t=0;t<n;t++){
         const x=Math.round(sRand(x0+8,x1-8)/4)*4,z=Math.round(sRand(z0+8,z1-8)/4)*4;
         if(nearPad(x,z,10))continue;
+        if(pond&&((x-pond.x)/(pond.rx+4))**2+((z-pond.z)/(pond.rz+4))**2<1)continue;
         if(trunks.some(o=>dist2(x,z,o.x,o.z)<13))continue;
         trunks.push({x,y:2.4,z,sx:1.5,sy:4.8,sz:1.5,c:new THREE.Color(0x6a5238)});
         const g=new THREE.Color().setHSL(.32,.55,sRand(.24,.42));
         leaves.push({x,y:6.6,z,sx:sRand(4.5,6.5),sy:sRand(3.5,5),sz:sRand(4.5,6.5),c:g});
         leaves.push({x:x+sRand(-1.5,1.5),y:9.4,z:z+sRand(-1.5,1.5),sx:sRand(2.5,4),sy:sRand(2,3.2),sz:sRand(2.5,4),c:g.clone().multiplyScalar(1.15)});
       }
+      const bx=pond?pond.x:sRand(x0+30,x1-30),bz=pond?pond.z:sRand(z0+30,z1-30);
+      for(const da of[0,Math.PI/2]){
+        const px=bx+Math.cos(da)*(pond?pond.rx+5:6),pz=bz+Math.sin(da)*(pond?pond.rz+5:6);
+        if(px<x0+4||px>x1-4||pz<z0+4||pz>z1-4)continue;
+        benches.push({x:px,y:.6,z:pz,sx:da===0?3.2:1,sy:1.2,sz:da===0?1:3.2,c:new THREE.Color(0x7a6248)});
+      }
       continue;
     }
-    if(specialBlocks.has(i+','+j))continue; /* магазин/автосалон строим сами ниже */
+    if(blockLot[i][j]){
+      lotRects.push({x0:x0+2,z0:z0+2,x1:x1-2,z1:z1-2});
+      continue;
+    }
+    if(specialBlocks.has(i+','+j))continue;
     const placed=[];
     const spots=[[x0,z0,(x1-x0)*.5,(z1-z0)*.5],[x1-(x1-x0)*.5,z1-(z1-z0)*.5,(x1-x0)*.5,(z1-z0)*.5]];
     for(const s of spots){
@@ -306,10 +343,25 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
     }
     for(const p of placed){
       if(nearPad(p.x+p.w/2,p.z+p.d/2,14))continue;
-      addBuilding(p.x,p.z,p.w/VS|0,p.d/VS|0,Math.min(8,5+(srng()*3|0)+(srng()<.1?2:0)));
+      addBuilding(p.x,p.z,p.w/VS|0,p.d/VS|0,Math.min(8,4+(srng()*4|0)+(srng()<.12?2:0)));
+    }
+    /* БАССЕЙН во дворе между домами */
+    if(srng()<.55){
+      for(let t=0;t<10;t++){
+        const pw=sRand(16,26),pd=sRand(12,20);
+        const px_=sRand(x0+8,Math.max(x0+9,x1-8-pw)),pz_=sRand(z0+8,Math.max(z0+9,z1-8-pd));
+        if(nearPad(px_+pw/2,pz_+pd/2,10))continue;
+        let ok=true;
+        for(const b of placed)
+          if(!(px_+pw+7<b.x||px_>b.x+b.w+7||pz_+pd+7<b.z||pz_>b.z+b.d+7)){ok=false;break;}
+        if(!ok)continue;
+        swimPools.push({x:px_,z:pz_,w:pw,d:pd});
+        /* низкий бортик: блокирует людей и машины, пули летят над водой */
+        boxes.push({x:px_+pw/2,z:pz_+pd/2,hw:pw/2,hd:pd/2,h:1.6});
+        break;
+      }
     }
   }
-  /* фонари по углам перекрёстков (только внутри периметра карты) */
   for(let i=0;i<=GRID;i++)for(let j=0;j<=GRID;j++){
     const x=i*CELL,z=j*CELL,o=AW+2.5;
     for(const s of[[-o,-o],[o,o]]){
@@ -321,7 +373,7 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
     }
   }
   /* СВЕТОФОРЫ: по столбу на центре каждой стоп-линии (4 подъезда),
-     со световым пятном на асфальте в цвет сигнала */
+     с БОЛЬШИМ световым пятном на асфальте в цвет сигнала */
   for(let i=0;i<GRID;i++)for(let j=0;j<GRID;j++){
     const cx=i*CELL,cz=j*CELL,sl=AW+8;
     for(const s of[-1,1]){
@@ -329,69 +381,87 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
       if(px<8||px>WORLD-8)continue;
       tlPoles.push({x:px,y:3,z:cz,sx:.5,sy:6,sz:.5});
       tlHeadList.push({x:px,y:6.4,z:cz,sx:1.5,sy:1.5,sz:1.5,axis:0,ci:i,cj:j,c:new THREE.Color(0x35ff77)});
-      tlGlows.push({x:px,y:.14,z:cz,axis:0,ci:i,cj:j,c:new THREE.Color(.15,1.0,.35)});
+      tlGlows.push({x:px,y:.14,z:cz,sx:16,sz:16,axis:0,ci:i,cj:j,c:new THREE.Color(.15,1.0,.35)});
     }
     for(const s of[-1,1]){
       const pz=cz+s*sl;
       if(pz<8||pz>WORLD-8)continue;
       tlPoles.push({x:cx,y:3,z:pz,sx:.5,sy:6,sz:.5});
       tlHeadList.push({x:cx,y:6.4,z:pz,sx:1.5,sy:1.5,sz:1.5,axis:1,ci:i,cj:j,c:new THREE.Color(0x35ff77)});
-      tlGlows.push({x:cx,y:.14,z:pz,axis:1,ci:i,cj:j,c:new THREE.Color(.15,1.0,.35)});
+      tlGlows.push({x:cx,y:.14,z:pz,sx:16,sz:16,axis:1,ci:i,cj:j,c:new THREE.Color(.15,1.0,.35)});
     }
   }
 })();
 
-/* ============ ЗДАНИЯ: база / магазин / автосалон ============ */
-function addWallSeg(x0,z0,x1,z1,hUnits,trim,wallHex){
+/* ============ СПЕЦ-ЗДАНИЯ ============ */
+function addWallSeg(x0,z0,x1,z1,hUnits,wallHex){
   const horiz=(z1-z0)<=(x1-x0);
   const len=horiz?x1-x0:z1-z0;
   const n=Math.max(1,Math.round(len/2));
-  const col=new THREE.Color(wallHex||0x46506a);
+  const col=new THREE.Color(wallHex);
   for(let i=0;i<n;i++){
     const cx=horiz?x0+1+i*2:(x0+x1)/2;
     const cz=horiz?(z0+z1)/2:z0+1+i*2;
     for(let y=0;y<hUnits;y++)
-      solids.push({x:cx,y:1+y*2,z:cz,sx:2,sy:2,sz:2,c:col.clone().multiplyScalar(sRand(.8,1.1))});
-    if(trim&&i%2===0)signsArr.push({x:cx,y:hUnits*2+1,z:cz,sx:2.3,sy:1,sz:2.3,c:trim});
+      solids.push({x:cx,y:1+y*2,z:cz,sx:2,sy:2,sz:2,c:col.clone().multiplyScalar(sRand(.85,1.1))});
   }
   boxes.push({x:(x0+x1)/2,z:(z0+z1)/2,hw:Math.max(1,(x1-x0)/2),hd:Math.max(1,(z1-z0)/2),h:hUnits*2});
 }
-const cCyan=new THREE.Color(0,1.5,1.8),cGreen=new THREE.Color(.2,1.9,.8),cPink=new THREE.Color(1.9,.35,1.2);
+const cCyan=new THREE.Color(0,1.6,1.9),cGreen=new THREE.Color(.2,1.9,.8),cPink=new THREE.Color(1.9,.35,1.2);
 (function buildSpecial(){
-  /* БАЗА: здание с входом с юга (x 374..382), циановая окантовка */
-  addWallSeg(364,339,392,341,6,cCyan,0x3e5060);
-  addWallSeg(364,359,374,361,6,cCyan,0x3e5060);
-  addWallSeg(382,359,392,361,6,cCyan,0x3e5060);
-  addWallSeg(364,341,366,359,6,cCyan,0x3e5060);
-  addWallSeg(390,341,392,359,6,cCyan,0x3e5060);
-  for(const dx of[375,381])signsArr.push({x:dx,y:5,z:360,sx:1,sy:10,sz:1,c:cCyan});
-  /* МАГАЗИН: вход с юга (x 582..590), зелёная окантовка */
-  addWallSeg(578,158,594,160,4,cGreen,0x3c4a3e);
-  addWallSeg(578,172,582,174,4,cGreen,0x3c4a3e);
-  addWallSeg(590,172,594,174,4,cGreen,0x3c4a3e);
-  addWallSeg(578,160,580,172,4,cGreen,0x3c4a3e);
-  addWallSeg(592,160,594,172,4,cGreen,0x3c4a3e);
-  for(const dx of[583,589])signsArr.push({x:dx,y:3.4,z:173,sx:1,sy:7,sz:1,c:cGreen});
-  /* АВТОСАЛОН: вход с юга (x 302..310), розовая окантовка */
-  addWallSeg(298,298,314,300,4,cPink,0x4a3a50);
-  addWallSeg(298,312,302,314,4,cPink,0x4a3a50);
-  addWallSeg(310,312,314,314,4,cPink,0x4a3a50);
-  addWallSeg(298,300,300,312,4,cPink,0x4a3a50);
-  addWallSeg(312,300,314,312,4,cPink,0x4a3a50);
-  for(const dx of[303,309])signsArr.push({x:dx,y:3.4,z:313,sx:1,sy:7,sz:1,c:cPink});
+  addWallSeg(364,339,392,341,3,0x3e5060);
+  addWallSeg(364,359,374,361,3,0x3e5060);
+  addWallSeg(382,359,392,361,3,0x3e5060);
+  addWallSeg(364,341,366,359,3,0x3e5060);
+  addWallSeg(390,341,392,359,3,0x3e5060);
+  addWallSeg(578,158,594,160,2,0x3c4a3e);
+  addWallSeg(578,172,582,174,2,0x3c4a3e);
+  addWallSeg(590,172,594,174,2,0x3c4a3e);
+  addWallSeg(578,160,580,172,2,0x3c4a3e);
+  addWallSeg(592,160,594,172,2,0x3c4a3e);
+  addWallSeg(298,298,314,300,2,0x4a3a50);
+  addWallSeg(298,312,302,314,2,0x4a3a50);
+  addWallSeg(310,312,314,314,2,0x4a3a50);
+  addWallSeg(298,300,300,312,2,0x4a3a50);
+  addWallSeg(312,300,314,312,2,0x4a3a50);
+  signsArr.push({x:378,y:6.4,z:360.9,sx:11,sy:1.6,sz:1,c:cCyan});
+  signsArr.push({x:586,y:4.8,z:173.9,sx:9,sy:1.6,sz:1,c:cGreen});
+  signsArr.push({x:306,y:4.8,z:313.9,sx:9,sy:1.6,sz:1,c:cPink});
 })();
 
-/* земля с текстурой дороги (пиксель = мировая координата, без сдвигов) */
+/* земля с текстурой дороги */
 function makeGroundTexture(){
   const S=2048,k=S/WORLD,X=v=>v*k;
   const c=document.createElement('canvas');c.width=c.height=S;
   const g=c.getContext('2d');
   g.fillStyle='#141a28';g.fillRect(0,0,S,S);
+  const blockShades=['#1a2130','#1c2030','#19222e','#1b2436','#1a1f2c'];
   for(let i=0;i<GRID;i++)for(let j=0;j<GRID;j++){
-    g.fillStyle=blockPark[i][j]?'#1d3a26':'#1a2130';
+    if(blockPark[i][j])g.fillStyle='#1d3a26';
+    else if(blockLot[i][j])g.fillStyle='#232830';
+    else g.fillStyle=blockShades[(srng()*blockShades.length)|0];
     g.fillRect(X(i*CELL+15),X(j*CELL+15),(CELL-30)*k,(CELL-30)*k);
   }
-  /* полы спец-зданий */
+  for(const p of pondList){
+    g.fillStyle='#0f2e40';
+    g.beginPath();g.ellipse(X(p.x),X(p.z),p.rx*k,p.rz*k,0,0,TAU);g.fill();
+    g.fillStyle='#1a4a66';
+    g.beginPath();g.ellipse(X(p.x),X(p.z),p.rx*.7*k,p.rz*.7*k,0,0,TAU);g.fill();
+  }
+  /* БАССЕЙНЫ: палуба, бортик, вода */
+  for(const p of swimPools){
+    g.fillStyle='#3a4148';g.fillRect(X(p.x-2.5),X(p.z-2.5),(p.w+5)*k,(p.d+5)*k);
+    g.fillStyle='#4d565f';g.fillRect(X(p.x-1),X(p.z-1),(p.w+2)*k,(p.d+2)*k);
+    g.fillStyle='#0c4157';g.fillRect(X(p.x),X(p.z),p.w*k,p.d*k);
+    g.fillStyle='#16608a';g.fillRect(X(p.x+1.5),X(p.z+1.5),(p.w-3)*k,(p.d-3)*k);
+  }
+  for(const L of lotRects){
+    const cx=(L.x0+L.x1)/2,cz=(L.z0+L.z1)/2;
+    g.fillStyle='rgba(210,225,255,.45)';
+    for(const rz of[cz-15,cz+15])
+      for(let x=cx-36;x<=cx+36;x+=8)
+        g.fillRect(X(x-.4),X(rz-7),.8*k,14*k);
+  }
   g.fillStyle='#1e2736';g.fillRect(X(366),X(341),24*k,18*k);
   g.fillStyle='#1e2f26';g.fillRect(X(580),X(160),12*k,12*k);
   g.fillStyle='#2c2030';g.fillRect(X(300),X(300),12*k,12*k);
@@ -399,7 +469,6 @@ function makeGroundTexture(){
   for(let i=0;i<=GRID;i++){g.fillRect(0,X(i*CELL-15),S,30*k);g.fillRect(X(i*CELL-15),0,30*k,S);}
   g.fillStyle='#2b313d';
   for(let i=0;i<=GRID;i++){g.fillRect(0,X(i*CELL-AW),S,AW*2*k);g.fillRect(X(i*CELL-AW),0,AW*2*k,S);}
-  /* прерывистая разметка — С ПРОПУСКОМ ПЕРЕКРЁСТКОВ */
   g.strokeStyle='rgba(252,238,10,.95)';g.lineWidth=Math.max(1.2,.8*k);g.setLineDash([8*k,10*k]);
   const nearCross=v=>R.some(r=>Math.abs(v-r)<AW+12);
   g.beginPath();
@@ -418,13 +487,11 @@ function makeGroundTexture(){
     }
   }
   g.stroke();g.setLineDash([]);
-  /* зебры у перекрёстков */
   g.fillStyle='rgba(210,225,255,.55)';
   for(let i=1;i<GRID;i++)for(let j=1;j<GRID;j++)for(const s of[-1,1])for(let st=-3;st<=3;st++){
     g.fillRect(X(i*CELL+st*2.2-.8),X(j*CELL+s*(AW+3)-2.8),1.6*k,5.6*k);
     g.fillRect(X(i*CELL+s*(AW+3)-2.8),X(j*CELL+st*2.2-.8),5.6*k,1.6*k);
   }
-  /* зоны: база / магазин / салон / скупка */
   g.fillStyle='rgba(0,240,255,.4)';g.fillRect(X(BASE.x-10),X(BASE.z-8),20*k,16*k);
   g.fillStyle='rgba(60,255,140,.45)';g.fillRect(X(SHOP.x-8),X(SHOP.z-8),16*k,16*k);
   g.fillStyle='rgba(255,77,196,.45)';g.fillRect(X(SALON.x-8),X(SALON.z-8),16*k,16*k);
@@ -442,6 +509,19 @@ function radialTex(rgb){
   g.fillStyle=gr;g.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);
 }
 
+/* ТУМАН ПО ПЕРИМЕТРУ КАРТЫ */
+{const S=512,c=document.createElement('canvas');c.width=c.height=S;
+ const g=c.getContext('2d');
+ const gr=g.createRadialGradient(256,256,0,256,256,256);
+ gr.addColorStop(0,'rgba(14,18,38,0)');
+ gr.addColorStop(.70,'rgba(14,18,38,0)');
+ gr.addColorStop(.88,'rgba(14,18,38,.8)');
+ gr.addColorStop(1,'rgba(14,18,38,1)');
+ g.fillStyle=gr;g.fillRect(0,0,S,S);
+ const fogRing=new THREE.Mesh(new THREE.PlaneGeometry(WORLD*1.5,WORLD*1.5).rotateX(-Math.PI/2),
+   new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));
+ fogRing.position.set(WORLD/2,.4,WORLD/2);scene.add(fogRing);}
+
 function mkInst(list,geo,mat,useColor){
   if(!list.length)return null;
   const im=new THREE.InstancedMesh(geo,mat,list.length);
@@ -456,6 +536,7 @@ function mkInst(list,geo,mat,useColor){
 const unitBox=new THREE.BoxGeometry(1,1,1);
 const glowPlaneGeo=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);
 mkInst(solids,unitBox,new THREE.MeshLambertMaterial(),true);
+mkInst(benches,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(wins,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
 mkInst(signsArr,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
 mkInst(trunks,unitBox,new THREE.MeshLambertMaterial(),true);
@@ -468,7 +549,27 @@ const tlGlowMesh=mkInst(tlGlows,glowPlaneGeo,
   new THREE.MeshBasicMaterial({map:radialTex('255,255,255'),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),true);
 mkInst(poolsA,new THREE.PlaneGeometry(20,20).rotateX(-Math.PI/2),
   new THREE.MeshBasicMaterial({map:radialTex('255,208,140'),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),false);
-/* светящиеся площадки-зоны */
+/* вода прудов — подсветка */
+for(const p of pondList){
+  const w=new THREE.Mesh(new THREE.PlaneGeometry(p.rx*1.7,p.rz*1.7).rotateX(-Math.PI/2),
+    new THREE.MeshBasicMaterial({map:radialTex('60,160,220'),transparent:true,opacity:.4,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
+  w.position.set(p.x,.15,p.z);scene.add(w);
+}
+/* ВОДА БАССЕЙНОВ: мерцающая подсвеченная поверхность */
+const poolWaters=[];
+for(const p of swimPools){
+  const w=new THREE.Mesh(new THREE.PlaneGeometry(p.w-1,p.d-1).rotateX(-Math.PI/2),
+    new THREE.MeshBasicMaterial({color:new THREE.Color(.25,1.3,1.6),transparent:true,opacity:.4,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
+  w.position.set(p.x+p.w/2,.2,p.z+p.d/2);scene.add(w);poolWaters.push(w);
+  /* мерцающие блики на воде */
+  for(let i=0;i<4;i++){
+    const sp=new THREE.Mesh(glowPlaneGeo,
+      new THREE.MeshBasicMaterial({map:radialTex('160,240,255'),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
+    sp.scale.set(sRand(3,6),1,sRand(3,6));
+    sp.position.set(p.x+sRand(3,p.w-3),.25,p.z+sRand(3,p.d-3));
+    scene.add(sp);poolWaters.push(sp);
+  }
+}
 function mkPad(x,z,w,h,hex){
   const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h).rotateX(-Math.PI/2),
     new THREE.MeshBasicMaterial({color:hex,transparent:true,opacity:.35,depthWrite:false}));
@@ -478,7 +579,6 @@ const padBase=mkPad(BASE.x,BASE.z,20,15,0x00f0ff);
 const padShop=mkPad(SHOP.x,SHOP.z,14,14,0x3cff8c);
 const padSalon=mkPad(SALON.x,SALON.z,14,14,0xff4dc4);
 const padDealer=mkPad(DEALER.x,DEALER.z,24,24,0xfcee0a);
-/* светящиеся полосы-входы */
 function mkDoorGlow(x,z,hex){
   const m=new THREE.Mesh(new THREE.PlaneGeometry(8,3).rotateX(-Math.PI/2),
     new THREE.MeshBasicMaterial({color:hex,transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
@@ -488,47 +588,7 @@ const doorGlow=mkDoorGlow(378,360.2,cCyan);
 const shopDoorGlow=mkDoorGlow(586,173.2,cGreen);
 const salonDoorGlow=mkDoorGlow(306,313.2,cPink);
 
-/* ============ РЕАЛЬНЫЕ ИСТОЧНИКИ СВЕТА ============ */
-const lampLights=[];
-{const N=isMobile?3:5;
-for(let i=0;i<N;i++){const L=new THREE.PointLight(0xffb870,0,60,1.9);L.position.y=6.8;scene.add(L);lampLights.push(L);}}
-let lampTimer=0;
-function updateLampLights(dt){
-  lampTimer-=dt;if(lampTimer>0)return;lampTimer=.2;
-  const px=player.inCar?player.inCar.x:player.x,pz=player.inCar?player.inCar.z:player.z;
-  const arr=[];
-  for(const p of poolsA){const d=(p.x-px)*(p.x-px)+(p.z-pz)*(p.z-pz);
-    if(d<150*150)arr.push({p,d});}
-  arr.sort((a,b)=>a.d-b.d);
-  for(let i=0;i<lampLights.length;i++){
-    const L=lampLights[i],e=arr[i];
-    if(e){L.position.set(e.p.x,6.8,e.p.z);L.intensity=260;}
-    else L.intensity=0;
-  }
-}
-/* СВЕЧЕНИЕ НЕОНОВЫХ ВЫВЕСОК */
-const signLights=[];
-{const N=isMobile?1:3;
-for(let i=0;i<N;i++){const L=new THREE.PointLight(0xffffff,0,30,1.9);scene.add(L);signLights.push(L);}}
-let signTimer=0;
-function updateSignLights(dt){
-  signTimer-=dt;if(signTimer>0)return;signTimer=.35;
-  const px=player.inCar?player.inCar.x:player.x,pz=player.inCar?player.inCar.z:player.z;
-  const arr=[];
-  for(const s of signsArr){
-    if(s.sy>6)continue;
-    const d=(s.x-px)*(s.x-px)+(s.z-pz)*(s.z-pz);
-    if(d<130*130)arr.push({s,d});
-  }
-  arr.sort((a,b)=>a.d-b.d);
-  for(let i=0;i<signLights.length;i++){
-    const L=signLights[i],e=arr[i];
-    if(e){L.position.set(e.s.x,e.s.y,e.s.z);L.color.copy(e.s.c);L.intensity=150;}
-    else L.intensity=0;
-  }
-}
-
-/* ФАРЫ И СТОП-СИГНАЛЫ ВСЕХ МАШИН: ДВА прожектора + ДВА стоп-фонаря */
+/* ============ СВЕТ МАШИН ============ */
 const headGlowMat=new THREE.MeshBasicMaterial({map:radialTex('255,235,180'),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
 const tailGlowMat=new THREE.MeshBasicMaterial({map:radialTex('255,50,40'),transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
 const carRigs=[];
@@ -587,7 +647,6 @@ function applyRig(rig){
   rig.tgL.scale.set(3*ts,1,5*ts);rig.tgR.scale.set(3*ts,1,5*ts);
 }
 
-/* машина игрока: 2 фары + 2 стоп-фонаря */
 const headL=new THREE.SpotLight(0xffe2b0,0,110,0.52,0.45,1.5);
 const headR=new THREE.SpotLight(0xffe2b0,0,110,0.52,0.45,1.5);
 const ptL=new THREE.PointLight(0xff2222,0,18,2);
@@ -635,13 +694,18 @@ function collideBoxes(o,r){
   }
   o.x=clamp(o.x,6,WORLD-6);o.z=clamp(o.z,6,WORLD-6);
 }
-function pointInBoxes(x,z,pad){
-  for(const b of boxes)if(x>b.x-b.hw-pad&&x<b.x+b.hw+pad&&z>b.z-b.hd-pad&&z<b.z+b.hd+pad)return true;
+/* pointInBoxes с высотой: низкие препятствия (вода бассейнов, h=1.6)
+   не ловят пули и линию огня, которые идут выше */
+function pointInBoxes(x,z,pad,y){
+  for(const b of boxes){
+    if(y!==undefined&&b.h<y)continue;
+    if(x>b.x-b.hw-pad&&x<b.x+b.hw+pad&&z>b.z-b.hd-pad&&z<b.z+b.hd+pad)return true;
+  }
   return false;
 }
 function hasLOS(x1,z1,x2,z2){
   const d=dist2(x1,z1,x2,z2),n=Math.ceil(d/6);
-  for(let i=1;i<n;i++){const t=i/n;if(pointInBoxes(lerp(x1,x2,t),lerp(z1,z2,t),0))return false;}
+  for(let i=1;i<n;i++){const t=i/n;if(pointInBoxes(lerp(x1,x2,t),lerp(z1,z2,t),0,1.7))return false;}
   return true;
 }
 
@@ -1107,7 +1171,8 @@ function updateBullets(dt){
     let hit=false;
     for(let s=0;s<2&&!hit;s++){
       b.x+=b.vx*dt/2;b.y+=b.vy*dt/2;b.z+=b.vz*dt/2;
-      if(b.y<.25||b.y>90||pointInBoxes(b.x,b.z,0)){
+      /* проверяем препятствия с высотой пули: над водой пролетаем */
+      if(b.y<.25||b.y>90||pointInBoxes(b.x,b.z,0,b.y)){
         spawnParts(b.x,Math.max(.4,b.y),b.z,3,cSpark,6,.25,.4);hit=true;break;}
       if(b.from==='p'){
         for(const p of peds)if(!p.dead&&dist2(b.x,b.z,p.x,p.z)<1.6&&b.y<3.8){killPed(p);hit=true;break;}
@@ -1210,7 +1275,9 @@ function updatePlayerCar(car,dt){
   if(brake)car.speed*=Math.pow(.22,dt);
   car.speed*=Math.pow(.62,dt);
   car.speed=clamp(car.speed,-13,42);
-  car.angle+=steer*2.1*dt*clamp(car.speed/16,-1,1);
+  /* ФИКС РУЛЕНИЯ: положительный steer (джойстик вправо / клавиша D)
+     теперь поворачивает машину ВПРАВО по экрану (раньше знак был обратный) */
+  car.angle-=steer*2.1*dt*clamp(car.speed/16,-1,1);
   const ox=car.x,oz=car.z;
   car.x+=Math.sin(car.angle)*car.speed*dt;
   car.z+=Math.cos(car.angle)*car.speed*dt;
@@ -1240,7 +1307,7 @@ function updatePlayerCar(car,dt){
   }
 }
 
-/* ============ ПОКУПКИ: магазин / автосалон (F) ============ */
+/* ============ ПОКУПКИ ============ */
 function tryBuy(){
   if(state!=='play'||buyCd>0)return;
   const px=player.x,pz=player.z;
@@ -1256,7 +1323,6 @@ function tryBuy(){
   if(dist2(px,pz,SALON.x,SALON.z)<9){
     buyCd=.5;
     if(money>=CAR_COST){
-      /* ищем свободное место для новой тачки перед салоном */
       let spot=null;
       outer:
       for(const dz of[9,13,17]){
@@ -1442,6 +1508,21 @@ function spawnParked(){
     car.parked=true;cars.push(car);
   }
 }
+function spawnLotCars(){
+  for(const L of lotRects){
+    const cx=(L.x0+L.x1)/2,cz=(L.z0+L.z1)/2;
+    for(const rz of[cz-15,cz+15]){
+      for(let i=0;i<10;i++){
+        const x=cx-36+4+i*8;
+        if(x<L.x0+6||x>L.x1-6)continue;
+        if(Math.random()>.45)continue;
+        if(cars.some(c=>dist2(x,rz,c.x,c.z)<9))continue;
+        const car=makeCar(x,rz,rz<cz?Math.PI:0,CAR_COLORS[sri(8)],false);
+        car.parked=true;cars.push(car);
+      }
+    }
+  }
+}
 
 /* ============ ГЛАВНЫЙ ЦИКЛ ============ */
 function update(dt){
@@ -1450,8 +1531,6 @@ function update(dt){
   player.fireCd-=dt;
   if(player.reload>0){player.reload-=dt;if(player.reload<=0)player.ammo=MAG;}
   if(muzzleT>0){muzzleT-=dt;if(muzzleT<=0){muzzleLight.intensity=0;muzzleLight.visible=false;}}
-  updateLampLights(dt);
-  updateSignLights(dt);
   updateCarRigs(dt);
   updateFxLights(dt);
   if(player.inCar&&!player.inCar.dead)updatePlayerCar(player.inCar,dt);
@@ -1538,6 +1617,11 @@ function syncWorld(){
   for(const c of cops)if(!c.dead)putShadow(c.x,c.z,3);
   if(!player.inCar)putShadow(player.x,player.z,3);
   shadowMesh.count=si;shadowMesh.instanceMatrix.needsUpdate=true;
+  /* мерцание воды бассейнов */
+  for(let i=0;i<poolWaters.length;i++){
+    const w=poolWaters[i];
+    w.material.opacity=.3+.18*Math.sin(t*1.8+i*1.7);
+  }
   if(player.inCar&&!player.inCar.dead){
     const c=player.inCar;
     const fx=Math.sin(c.angle),fz=Math.cos(c.angle);
@@ -1575,9 +1659,10 @@ function syncWorld(){
     sirLight.color.set(on?0xff2233:0x2244ff);
     sirLight.intensity=140;
   }else sirLight.intensity=0;
+  /* СВЕТОФОРЫ: яркие HDR-головки + большое пятно на асфальте */
   if(tlHeadMesh&&tlGlowMesh){
-    const hg=new THREE.Color(.3,1.8,.6),hr=new THREE.Color(2.0,.25,.35);
-    const gg=new THREE.Color(.15,1.0,.35),gr=new THREE.Color(1.2,.15,.22);
+    const hg=new THREE.Color(.35,2.2,.7),hr=new THREE.Color(2.4,.3,.4);
+    const gg=new THREE.Color(.2,1.3,.5),gr=new THREE.Color(1.6,.18,.28);
     for(let i=0;i<tlHeadList.length;i++){
       const h=tlHeadList[i],green=lightGreen(h.axis,h.ci,h.cj);
       tlHeadMesh.setColorAt(i,green?hg:hr);
@@ -1643,6 +1728,7 @@ function drawHUD(){
   const s=.34,X=v=>(v-player.x)*s,Z=v=>(v-player.z)*s;
   mc.fillStyle='#252b38';
   for(const b of boxes){
+    if(b.h<3)continue; /* бассейны на миникарте не рисуем */
     const x=X(b.x-b.hw),z=Z(b.z-b.hd);
     if(x>-75&&x<75&&z>-75&&z<75)mc.fillRect(x,z,b.hw*2*s,b.hd*2*s);
   }
@@ -1707,7 +1793,7 @@ function frame(now){
   else if(state==='menu'){
     for(const car of cars)if(car.ai&&!car.dead&&!car.cop)updateAICar(car,dt);
     separateCars();
-    updatePeds(dt);updateParts(dt);updateLampLights(dt);updateSignLights(dt);updateCarRigs(dt);updateFxLights(dt);
+    updatePeds(dt);updateParts(dt);updateCarRigs(dt);updateFxLights(dt);
   }
   syncWorld();
   updateCamera(dt);
@@ -1742,7 +1828,7 @@ function resetGame(){
   player.x=BASE.x;player.z=366;player.hp=100;player.ammo=MAG;player.reload=0;player.inCar=null;
   playerH.g.visible=true;
   camCX=player.x;camCZ=player.z;camHcur=76;
-  spawnParked();spawnTraffic(12);
+  spawnParked();spawnLotCars();spawnTraffic(12);
   for(let i=0;i<20;i++)updatePeds(0);
 }
 document.getElementById('btnStart').addEventListener('click',()=>{
@@ -1765,4 +1851,3 @@ resetGame();
 window.__booted=true;
 </script>
 </body>
-</html>

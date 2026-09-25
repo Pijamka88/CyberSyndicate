@@ -249,7 +249,8 @@ function nearPad(x,z,m){
 
 const palette=['#6e6250','#5c5850','#756752','#2e3a58','#3d2f52','#254652','#6d5f4a','#3a4a38',
 '#6b4650','#4a5a3a','#4a3a2e','#2f4a44','#54405e','#333850','#5e3a3a','#3a5258'];
-const signCols=[new THREE.Color(2.5,2.3,.25),new THREE.Color(2.6,.55,1.75),new THREE.Color(.25,2.4,2.6)];
+/* НЕОН ВЫВЕСОК: ярок как светофор (HDR 4.0+) — жёлтый, розовый, бирюзовый */
+const signCols=[new THREE.Color(4.0,3.7,.4),new THREE.Color(4.2,.9,2.8),new THREE.Color(.4,4.0,4.2)];
 const winCols=[new THREE.Color(1.35,1.05,.55),new THREE.Color(.55,1.15,1.4),new THREE.Color(1.3,.6,.9)];
 
 function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
@@ -261,31 +262,61 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
     const c=base.clone().multiplyScalar(sRand(.75,1.15));
     solids.push({x:bx+ix*VS+VS/2,y:iy*VS+VS/2,z:bz+iz*VS+VS/2,sx:VS,sy:VS,sz:VS,c});
   }
-  for(let iy=1;iy<bh-1;iy++)for(let ix=0;ix<bw;ix++)for(let iz=0;iz<bd;iz++){
-    if(srng()>=.22)continue;
-    const c=winCol?new THREE.Color(winCol):(srng()<.78?winCols[srng()<.7?0:1]:winCols[2]);
-    if(ix===0)wins.push({x:bx-.4,y:iy*VS+VS/2,z:bz+iz*VS+VS/2,sx:.4,sy:VS*.55,sz:VS*.6,c});
-    if(ix===bw-1)wins.push({x:bx+w+.4,y:iy*VS+VS/2,z:bz+iz*VS+VS/2,sx:.4,sy:VS*.55,sz:VS*.6,c});
-    if(iz===0)wins.push({x:bx+ix*VS+VS/2,y:iy*VS+VS/2,z:bz-.4,sx:VS*.6,sy:VS*.55,sz:.4,c});
-    if(iz===bd-1)wins.push({x:bx+ix*VS+VS/2,y:iy*VS+VS/2,z:bz+d+.4,sx:VS*.6,sy:VS*.55,sz:.4,c});
+  /* === РАЗДЕЛЬНЫЕ ЗОНЫ ФАСАДА ===
+     окна: вдоль всей стены с отступом SIGN_W от угла;
+     вывески: ровно полоса SIGN_W на краю стены.
+     Пересечение исключено геометрически. */
+  const SIGN_W=2.6;
+  for(let iy=1;iy<bh-1;iy++){
+    /* окна запад/восток (ix=0 и ix=bw-1): z от угла+SIGN_W до угла+VS-SIGN_W */
+    for(let iz=0;iz<bd;iz++){
+      const zin=bz+iz*VS;
+      if(zin+VS<bz+SIGN_W||zin>bz+d-SIGN_W)continue; /* угловые зоны — под вывески */
+      if(srng()>=.22)continue;
+      const c=winCol?new THREE.Color(winCol):(srng()<.78?winCols[srng()<.7?0:1]:winCols[2]);
+      if(true){
+        wins.push({x:bx-.4,y:iy*VS+VS/2,z:zin+VS/2,sx:.4,sy:VS*.55,sz:VS*.5,c});
+        wins.push({x:bx+w+.4,y:iy*VS+VS/2,z:zin+VS/2,sx:.4,sy:VS*.55,sz:VS*.5,c});
+      }
+    }
+    /* окна север/юг */
+    for(let ix2=0;ix2<bw;ix2++){
+      const xin=bx+ix2*VS;
+      if(xin+VS<bx+SIGN_W||xin>bx+w-SIGN_W)continue;
+      if(srng()>=.22)continue;
+      const c=winCol?new THREE.Color(winCol):(srng()<.78?winCols[srng()<.7?0:1]:winCols[2]);
+      wins.push({x:xin+VS/2,y:iy*VS+VS/2,z:bz-.4,sx:VS*.5,sy:VS*.55,sz:.4,c});
+      wins.push({x:xin+VS/2,y:iy*VS+VS/2,z:bz+d+.4,sx:VS*.5,sy:VS*.55,sz:.4,c});
+    }
   }
   const nk=2+(srng()*3|0);
   for(let k=0;k<nk;k++)solids.push({x:bx+sRand(VS,w-VS),y:bh*VS+VS*.25,z:bz+sRand(VS,d-VS),
     sx:VS*sRand(.4,.7),sy:VS*sRand(.3,.5),sz:VS*sRand(.4,.7),c:base.clone().multiplyScalar(.6)});
+  /* === ВЫВЕСКИ: только в угловых зонах фасада (SIGN_W на краю) ===
+     никогда не наезжают на окна: окна туда просто не ставятся */
   if(!winCol){
-    const cnt=1+(srng()*2|0);
-    for(let s=0;s<cnt;s++){
+    for(let iy=1;iy<bh-1;iy++){
+      if(srng()<.4)continue; /* неон на ~60% этажей */
       const sc=signCols[(srng()*3)|0];
+      const cy=iy*VS+VS/2;
       if(srng()<.5){
-        const h=sRand(10,24),cy=sRand(bh*VS*.3,bh*VS*.6);
-        if(srng()<.5)signsArr.push({x:bx-1.4,y:cy,z:bz+sRand(2,Math.max(3,d-2)),sx:1.8,sy:h,sz:1.8,c:sc});
-        else signsArr.push({x:bx+sRand(2,Math.max(3,w-2)),y:cy,z:bz-1.4,sx:1.8,sy:h,sz:1.8,c:sc});
+        /* вертикальная неоновая полоса у края стены */
+        const side=srng()<.5;
+        const zz=bz+(side?sRand(.5,SIGN_W-.5):d-sRand(.5,SIGN_W-.5));
+        if(srng()<.5)
+          signsArr.push({x:bx-1.4,y:cy,z:zz,sx:1.8,sy:VS*.8,sz:1.8,c:sc});
+        else
+          signsArr.push({x:bx+w+1.4,y:cy,z:zz,sx:1.8,sy:VS*.8,sz:1.8,c:sc});
       }else{
-        const len=sRand(10,Math.max(11,Math.min(w,d)-2)),cy=sRand(bh*VS*.3,bh*VS*.7);
-        if(srng()<.5)signsArr.push({x:bx-1.4,y:cy,z:bz+d/2-len/2+sRand(0,Math.max(.1,d-len)),sx:1.8,sy:2.6,sz:len,c:sc});
-        else signsArr.push({x:bx+w/2-len/2+sRand(0,Math.max(.1,w-len)),y:cy,z:bz-1.4,sx:len,sy:2.6,sz:1.8,c:sc});
+        /* горизонтальная неоновая панель вдоль края стены */
+        const len=sRand(8,Math.max(9,Math.min(w,d)-SIGN_W));
+        if(srng()<.5)
+          signsArr.push({x:bx-1.4,y:cy,z:bz+sRand(.8,SIGN_W-1),sx:1.8,sy:2.2,sz:len,c:sc});
+        else
+          signsArr.push({x:bx+sRand(.8,SIGN_W-1),y:cy,z:bz-1.4,sx:len,sy:2.2,sz:1.8,c:sc});
       }
     }
+    /* рекламный щит на крыше (виден сверху) */
     if(srng()<.35){
       const sc=signCols[(srng()*3)|0];
       const bl=Math.min(w-4,sRand(14,26));
@@ -345,7 +376,6 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
       if(nearPad(p.x+p.w/2,p.z+p.d/2,14))continue;
       addBuilding(p.x,p.z,p.w/VS|0,p.d/VS|0,Math.min(8,4+(srng()*4|0)+(srng()<.12?2:0)));
     }
-    /* БАССЕЙН во дворе между домами */
     if(srng()<.55){
       for(let t=0;t<10;t++){
         const pw=sRand(16,26),pd=sRand(12,20);
@@ -356,7 +386,6 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
           if(!(px_+pw+7<b.x||px_>b.x+b.w+7||pz_+pd+7<b.z||pz_>b.z+b.d+7)){ok=false;break;}
         if(!ok)continue;
         swimPools.push({x:px_,z:pz_,w:pw,d:pd});
-        /* низкий бортик: блокирует людей и машины, пули летят над водой */
         boxes.push({x:px_+pw/2,z:pz_+pd/2,hw:pw/2,hd:pd/2,h:1.6});
         break;
       }
@@ -372,8 +401,7 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
       poolsA.push({x:lx,z:lz});
     }
   }
-  /* СВЕТОФОРЫ: по столбу на центре каждой стоп-линии (4 подъезда),
-     с БОЛЬШИМ световым пятном на асфальте в цвет сигнала */
+  /* СВЕТОФОРЫ на центрах стоп-линий */
   for(let i=0;i<GRID;i++)for(let j=0;j<GRID;j++){
     const cx=i*CELL,cz=j*CELL,sl=AW+8;
     for(const s of[-1,1]){
@@ -448,7 +476,6 @@ function makeGroundTexture(){
     g.fillStyle='#1a4a66';
     g.beginPath();g.ellipse(X(p.x),X(p.z),p.rx*.7*k,p.rz*.7*k,0,0,TAU);g.fill();
   }
-  /* БАССЕЙНЫ: палуба, бортик, вода */
   for(const p of swimPools){
     g.fillStyle='#3a4148';g.fillRect(X(p.x-2.5),X(p.z-2.5),(p.w+5)*k,(p.d+5)*k);
     g.fillStyle='#4d565f';g.fillRect(X(p.x-1),X(p.z-1),(p.w+2)*k,(p.d+2)*k);
@@ -509,7 +536,7 @@ function radialTex(rgb){
   g.fillStyle=gr;g.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);
 }
 
-/* ТУМАН ПО ПЕРИМЕТРУ КАРТЫ */
+/* ТУМАН ПО ПЕРИМЕТРУ */
 {const S=512,c=document.createElement('canvas');c.width=c.height=S;
  const g=c.getContext('2d');
  const gr=g.createRadialGradient(256,256,0,256,256,256);
@@ -549,19 +576,16 @@ const tlGlowMesh=mkInst(tlGlows,glowPlaneGeo,
   new THREE.MeshBasicMaterial({map:radialTex('255,255,255'),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),true);
 mkInst(poolsA,new THREE.PlaneGeometry(20,20).rotateX(-Math.PI/2),
   new THREE.MeshBasicMaterial({map:radialTex('255,208,140'),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),false);
-/* вода прудов — подсветка */
 for(const p of pondList){
   const w=new THREE.Mesh(new THREE.PlaneGeometry(p.rx*1.7,p.rz*1.7).rotateX(-Math.PI/2),
     new THREE.MeshBasicMaterial({map:radialTex('60,160,220'),transparent:true,opacity:.4,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
   w.position.set(p.x,.15,p.z);scene.add(w);
 }
-/* ВОДА БАССЕЙНОВ: мерцающая подсвеченная поверхность */
 const poolWaters=[];
 for(const p of swimPools){
   const w=new THREE.Mesh(new THREE.PlaneGeometry(p.w-1,p.d-1).rotateX(-Math.PI/2),
     new THREE.MeshBasicMaterial({color:new THREE.Color(.25,1.3,1.6),transparent:true,opacity:.4,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
   w.position.set(p.x+p.w/2,.2,p.z+p.d/2);scene.add(w);poolWaters.push(w);
-  /* мерцающие блики на воде */
   for(let i=0;i<4;i++){
     const sp=new THREE.Mesh(glowPlaneGeo,
       new THREE.MeshBasicMaterial({map:radialTex('160,240,255'),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
@@ -694,8 +718,6 @@ function collideBoxes(o,r){
   }
   o.x=clamp(o.x,6,WORLD-6);o.z=clamp(o.z,6,WORLD-6);
 }
-/* pointInBoxes с высотой: низкие препятствия (вода бассейнов, h=1.6)
-   не ловят пули и линию огня, которые идут выше */
 function pointInBoxes(x,z,pad,y){
   for(const b of boxes){
     if(y!==undefined&&b.h<y)continue;
@@ -1171,7 +1193,6 @@ function updateBullets(dt){
     let hit=false;
     for(let s=0;s<2&&!hit;s++){
       b.x+=b.vx*dt/2;b.y+=b.vy*dt/2;b.z+=b.vz*dt/2;
-      /* проверяем препятствия с высотой пули: над водой пролетаем */
       if(b.y<.25||b.y>90||pointInBoxes(b.x,b.z,0,b.y)){
         spawnParts(b.x,Math.max(.4,b.y),b.z,3,cSpark,6,.25,.4);hit=true;break;}
       if(b.from==='p'){
@@ -1275,8 +1296,6 @@ function updatePlayerCar(car,dt){
   if(brake)car.speed*=Math.pow(.22,dt);
   car.speed*=Math.pow(.62,dt);
   car.speed=clamp(car.speed,-13,42);
-  /* ФИКС РУЛЕНИЯ: положительный steer (джойстик вправо / клавиша D)
-     теперь поворачивает машину ВПРАВО по экрану (раньше знак был обратный) */
   car.angle-=steer*2.1*dt*clamp(car.speed/16,-1,1);
   const ox=car.x,oz=car.z;
   car.x+=Math.sin(car.angle)*car.speed*dt;
@@ -1474,7 +1493,7 @@ function updatePeds(dt){
   }
 }
 function spawnTraffic(n){
-  let count=0;for(const c of cars)if(c.ai&&!c.cop)count++;
+  let count=0;for(const c in cars)if(c.ai&&!c.cop)count++;
   let tries=0;
   while(count<n&&tries<40){
     tries++;
@@ -1617,7 +1636,6 @@ function syncWorld(){
   for(const c of cops)if(!c.dead)putShadow(c.x,c.z,3);
   if(!player.inCar)putShadow(player.x,player.z,3);
   shadowMesh.count=si;shadowMesh.instanceMatrix.needsUpdate=true;
-  /* мерцание воды бассейнов */
   for(let i=0;i<poolWaters.length;i++){
     const w=poolWaters[i];
     w.material.opacity=.3+.18*Math.sin(t*1.8+i*1.7);
@@ -1659,7 +1677,6 @@ function syncWorld(){
     sirLight.color.set(on?0xff2233:0x2244ff);
     sirLight.intensity=140;
   }else sirLight.intensity=0;
-  /* СВЕТОФОРЫ: яркие HDR-головки + большое пятно на асфальте */
   if(tlHeadMesh&&tlGlowMesh){
     const hg=new THREE.Color(.35,2.2,.7),hr=new THREE.Color(2.4,.3,.4);
     const gg=new THREE.Color(.2,1.3,.5),gr=new THREE.Color(1.6,.18,.28);
@@ -1728,7 +1745,7 @@ function drawHUD(){
   const s=.34,X=v=>(v-player.x)*s,Z=v=>(v-player.z)*s;
   mc.fillStyle='#252b38';
   for(const b of boxes){
-    if(b.h<3)continue; /* бассейны на миникарте не рисуем */
+    if(b.h<3)continue;
     const x=X(b.x-b.hw),z=Z(b.z-b.hd);
     if(x>-75&&x<75&&z>-75&&z<75)mc.fillRect(x,z,b.hw*2*s,b.hd*2*s);
   }

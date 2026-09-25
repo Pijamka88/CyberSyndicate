@@ -8,7 +8,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#04050a;font-family:'JetBrains Mono',Consolas,monospace;user-select:none;touch-action:none}
-#game,#fx{position:fixed;inset:0;display:block}
+#game,#fx{position:fixed;top:0;left:0;display:block}
 #game{cursor:none}
 #fx{z-index:3;pointer-events:none}
 #scan{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:.4;
@@ -188,13 +188,13 @@ function lightGreen(axis,ci,cj){const ph=(gameTime/7+ci*0.37+cj*0.53)%1;return a
 /* ============ РЕНДЕР ============ */
 const canvas=document.getElementById('game');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.3;
+const fxc=document.getElementById('fx'),fctx=fxc.getContext('2d');
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x0e1226);
 scene.fog=new THREE.Fog(0x0e1226,150,660);
 const camera=new THREE.PerspectiveCamera(42,1,0.1,1600);
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.3;
 
 scene.add(new THREE.HemisphereLight(0x6a7fb8,0x1c1626,1.5));
 const moon=new THREE.DirectionalLight(0xaebcff,1.0);moon.position.set(1,2,0.5);scene.add(moon);
@@ -203,20 +203,27 @@ if(!isMobile){
   const fillMag=new THREE.DirectionalLight(0xaa2a66,0.4);fillMag.position.set(0.4,0.5,-1);scene.add(fillMag);
 }
 
-let VW=0,VH=0;
-const fxc=document.getElementById('fx'),fctx=fxc.getContext('2d');
-function resize(){VW=innerWidth;VH=innerHeight;renderer.setSize(VW,VH);
-camera.aspect=VW/VH;camera.updateProjectionMatrix();fxc.width=VW;fxc.height=VH;
-if(composer)composer.setSize(VW,VH);}
-addEventListener('resize',resize);
-
-let composer=null;
+let VW=0,VH=0,composer=null;
 if(!isMobile){
   composer=new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene,camera));
   composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.9,0.5,0.45));
   composer.addPass(new OutputPass());
 }
+/* Надёжный ресайз: канвасы и композитор получают и размер, и pixel ratio —
+   иначе буфер блума мог рассинхронизироваться с окном (чёрное поле справа) */
+function resize(){
+  VW=innerWidth;VH=innerHeight;
+  const pr=Math.min(window.devicePixelRatio||1,2);
+  renderer.setPixelRatio(pr);
+  renderer.setSize(VW,VH);
+  canvas.style.width=VW+'px';canvas.style.height=VH+'px';
+  camera.aspect=VW/VH;camera.updateProjectionMatrix();
+  fxc.width=Math.round(VW);fxc.height=Math.round(VH);
+  fxc.style.width=VW+'px';fxc.style.height=VH+'px';
+  if(composer){composer.setPixelRatio(pr);composer.setSize(VW,VH);}
+}
+addEventListener('resize',resize);
 resize();
 
 /* звёзды */
@@ -229,7 +236,7 @@ scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0xcfdaff,size:1.7,s
 /* ============ ГЕНЕРАЦИЯ ГОРОДА ============ */
 const boxes=[];
 const solids=[],wins=[],signsArr=[],trunks=[],leaves=[],lampPoles=[],lampHeads=[],poolsA=[],
-tlPoles=[],tlHeadList=[],tlGlows=[],benches=[],lotRects=[],pondList=[],swimPools=[];
+tlHeadList=[],tlGlows=[],benches=[],lotRects=[],pondList=[],swimPools=[];
 const blockPark=[],blockLot=[];
 for(let i=0;i<GRID;i++){
   blockPark[i]=[];blockLot[i]=[];
@@ -249,7 +256,6 @@ function nearPad(x,z,m){
 
 const palette=['#6e6250','#5c5850','#756752','#2e3a58','#3d2f52','#254652','#6d5f4a','#3a4a38',
 '#6b4650','#4a5a3a','#4a3a2e','#2f4a44','#54405e','#333850','#5e3a3a','#3a5258'];
-/* НЕОН ВЫВЕСОК: ярок как светофор (HDR 4.0+) — жёлтый, розовый, бирюзовый */
 const signCols=[new THREE.Color(4.0,3.7,.4),new THREE.Color(4.2,.9,2.8),new THREE.Color(.4,4.0,4.2)];
 const winCols=[new THREE.Color(1.35,1.05,.55),new THREE.Color(.55,1.15,1.4),new THREE.Color(1.3,.6,.9)];
 
@@ -262,24 +268,17 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
     const c=base.clone().multiplyScalar(sRand(.75,1.15));
     solids.push({x:bx+ix*VS+VS/2,y:iy*VS+VS/2,z:bz+iz*VS+VS/2,sx:VS,sy:VS,sz:VS,c});
   }
-  /* === РАЗДЕЛЬНЫЕ ЗОНЫ ФАСАДА ===
-     окна: вдоль всей стены с отступом SIGN_W от угла;
-     вывески: ровно полоса SIGN_W на краю стены.
-     Пересечение исключено геометрически. */
+  /* окна и вывески — в разных зонах фасада, не пересекаются */
   const SIGN_W=2.6;
   for(let iy=1;iy<bh-1;iy++){
-    /* окна запад/восток (ix=0 и ix=bw-1): z от угла+SIGN_W до угла+VS-SIGN_W */
     for(let iz=0;iz<bd;iz++){
       const zin=bz+iz*VS;
-      if(zin+VS<bz+SIGN_W||zin>bz+d-SIGN_W)continue; /* угловые зоны — под вывески */
+      if(zin+VS<bz+SIGN_W||zin>bz+d-SIGN_W)continue;
       if(srng()>=.22)continue;
       const c=winCol?new THREE.Color(winCol):(srng()<.78?winCols[srng()<.7?0:1]:winCols[2]);
-      if(true){
-        wins.push({x:bx-.4,y:iy*VS+VS/2,z:zin+VS/2,sx:.4,sy:VS*.55,sz:VS*.5,c});
-        wins.push({x:bx+w+.4,y:iy*VS+VS/2,z:zin+VS/2,sx:.4,sy:VS*.55,sz:VS*.5,c});
-      }
+      wins.push({x:bx-.4,y:iy*VS+VS/2,z:zin+VS/2,sx:.4,sy:VS*.55,sz:VS*.5,c});
+      wins.push({x:bx+w+.4,y:iy*VS+VS/2,z:zin+VS/2,sx:.4,sy:VS*.55,sz:VS*.5,c});
     }
-    /* окна север/юг */
     for(let ix2=0;ix2<bw;ix2++){
       const xin=bx+ix2*VS;
       if(xin+VS<bx+SIGN_W||xin>bx+w-SIGN_W)continue;
@@ -292,31 +291,22 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
   const nk=2+(srng()*3|0);
   for(let k=0;k<nk;k++)solids.push({x:bx+sRand(VS,w-VS),y:bh*VS+VS*.25,z:bz+sRand(VS,d-VS),
     sx:VS*sRand(.4,.7),sy:VS*sRand(.3,.5),sz:VS*sRand(.4,.7),c:base.clone().multiplyScalar(.6)});
-  /* === ВЫВЕСКИ: только в угловых зонах фасада (SIGN_W на краю) ===
-     никогда не наезжают на окна: окна туда просто не ставятся */
   if(!winCol){
     for(let iy=1;iy<bh-1;iy++){
-      if(srng()<.4)continue; /* неон на ~60% этажей */
+      if(srng()<.4)continue;
       const sc=signCols[(srng()*3)|0];
       const cy=iy*VS+VS/2;
       if(srng()<.5){
-        /* вертикальная неоновая полоса у края стены */
         const side=srng()<.5;
         const zz=bz+(side?sRand(.5,SIGN_W-.5):d-sRand(.5,SIGN_W-.5));
-        if(srng()<.5)
-          signsArr.push({x:bx-1.4,y:cy,z:zz,sx:1.8,sy:VS*.8,sz:1.8,c:sc});
-        else
-          signsArr.push({x:bx+w+1.4,y:cy,z:zz,sx:1.8,sy:VS*.8,sz:1.8,c:sc});
+        if(srng()<.5)signsArr.push({x:bx-1.4,y:cy,z:zz,sx:1.8,sy:VS*.8,sz:1.8,c:sc});
+        else signsArr.push({x:bx+w+1.4,y:cy,z:zz,sx:1.8,sy:VS*.8,sz:1.8,c:sc});
       }else{
-        /* горизонтальная неоновая панель вдоль края стены */
         const len=sRand(8,Math.max(9,Math.min(w,d)-SIGN_W));
-        if(srng()<.5)
-          signsArr.push({x:bx-1.4,y:cy,z:bz+sRand(.8,SIGN_W-1),sx:1.8,sy:2.2,sz:len,c:sc});
-        else
-          signsArr.push({x:bx+sRand(.8,SIGN_W-1),y:cy,z:bz-1.4,sx:len,sy:2.2,sz:1.8,c:sc});
+        if(srng()<.5)signsArr.push({x:bx-1.4,y:cy,z:bz+sRand(.8,SIGN_W-1),sx:1.8,sy:2.2,sz:len,c:sc});
+        else signsArr.push({x:bx+sRand(.8,SIGN_W-1),y:cy,z:bz-1.4,sx:len,sy:2.2,sz:1.8,c:sc});
       }
     }
-    /* рекламный щит на крыше (виден сверху) */
     if(srng()<.35){
       const sc=signCols[(srng()*3)|0];
       const bl=Math.min(w-4,sRand(14,26));
@@ -401,21 +391,22 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
       poolsA.push({x:lx,z:lz});
     }
   }
-  /* СВЕТОФОРЫ на центрах стоп-линий */
+  /* СВЕТОФОРЫ: БЕЗ СТОЛБА — две парящие лампы (зелёная + красная)
+     на центре каждой стоп-линии; неактивная лампа — серая */
   for(let i=0;i<GRID;i++)for(let j=0;j<GRID;j++){
     const cx=i*CELL,cz=j*CELL,sl=AW+8;
     for(const s of[-1,1]){
       const px=cx+s*sl;
       if(px<8||px>WORLD-8)continue;
-      tlPoles.push({x:px,y:3,z:cz,sx:.5,sy:6,sz:.5});
-      tlHeadList.push({x:px,y:6.4,z:cz,sx:1.5,sy:1.5,sz:1.5,axis:0,ci:i,cj:j,c:new THREE.Color(0x35ff77)});
+      tlHeadList.push({x:px,y:5.5,z:cz-1.2,sx:1.4,sy:1.4,sz:1.4,axis:0,ci:i,cj:j,lamp:'g',c:new THREE.Color(0x35ff77)});
+      tlHeadList.push({x:px,y:5.5,z:cz+1.2,sx:1.4,sy:1.4,sz:1.4,axis:0,ci:i,cj:j,lamp:'r',c:new THREE.Color(0xff2a3c)});
       tlGlows.push({x:px,y:.14,z:cz,sx:16,sz:16,axis:0,ci:i,cj:j,c:new THREE.Color(.15,1.0,.35)});
     }
     for(const s of[-1,1]){
       const pz=cz+s*sl;
       if(pz<8||pz>WORLD-8)continue;
-      tlPoles.push({x:cx,y:3,z:pz,sx:.5,sy:6,sz:.5});
-      tlHeadList.push({x:cx,y:6.4,z:pz,sx:1.5,sy:1.5,sz:1.5,axis:1,ci:i,cj:j,c:new THREE.Color(0x35ff77)});
+      tlHeadList.push({x:cx-1.2,y:5.5,z:pz,sx:1.4,sy:1.4,sz:1.4,axis:1,ci:i,cj:j,lamp:'g',c:new THREE.Color(0x35ff77)});
+      tlHeadList.push({x:cx+1.2,y:5.5,z:pz,sx:1.4,sy:1.4,sz:1.4,axis:1,ci:i,cj:j,lamp:'r',c:new THREE.Color(0xff2a3c)});
       tlGlows.push({x:cx,y:.14,z:pz,sx:16,sz:16,axis:1,ci:i,cj:j,c:new THREE.Color(.15,1.0,.35)});
     }
   }
@@ -536,18 +527,20 @@ function radialTex(rgb){
   g.fillStyle=gr;g.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);
 }
 
-/* ТУМАН ПО ПЕРИМЕТРУ */
+/* ТУМАН ПО ПЕРИМЕТРУ: мягкая дымка, без плотной "чёрной стены".
+   Плотная часть градиента вынесена за пределы видимости камеры */
 {const S=512,c=document.createElement('canvas');c.width=c.height=S;
  const g=c.getContext('2d');
  const gr=g.createRadialGradient(256,256,0,256,256,256);
- gr.addColorStop(0,'rgba(14,18,38,0)');
- gr.addColorStop(.70,'rgba(14,18,38,0)');
- gr.addColorStop(.88,'rgba(14,18,38,.8)');
- gr.addColorStop(1,'rgba(14,18,38,1)');
+ gr.addColorStop(0,'rgba(24,32,58,0)');
+ gr.addColorStop(.46,'rgba(24,32,58,0)');
+ gr.addColorStop(.58,'rgba(24,32,58,.35)');
+ gr.addColorStop(.72,'rgba(24,32,58,.7)');
+ gr.addColorStop(1,'rgba(24,32,58,.95)');
  g.fillStyle=gr;g.fillRect(0,0,S,S);
- const fogRing=new THREE.Mesh(new THREE.PlaneGeometry(WORLD*1.5,WORLD*1.5).rotateX(-Math.PI/2),
-   new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false}));
- fogRing.position.set(WORLD/2,.4,WORLD/2);scene.add(fogRing);}
+ const fogRing=new THREE.Mesh(new THREE.PlaneGeometry(WORLD*2,WORLD*2).rotateX(-Math.PI/2),
+   new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false,toneMapped:false}));
+ fogRing.position.set(WORLD/2,.45,WORLD/2);scene.add(fogRing);}
 
 function mkInst(list,geo,mat,useColor){
   if(!list.length)return null;
@@ -570,7 +563,6 @@ mkInst(trunks,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(leaves,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(lampPoles,unitBox,new THREE.MeshLambertMaterial({color:0x39404e}),false);
 mkInst(lampHeads,unitBox,new THREE.MeshBasicMaterial({color:new THREE.Color(2.4,1.8,1.0),toneMapped:false}),false);
-mkInst(tlPoles,unitBox,new THREE.MeshLambertMaterial({color:0x2c3038}),false);
 const tlHeadMesh=mkInst(tlHeadList,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
 const tlGlowMesh=mkInst(tlGlows,glowPlaneGeo,
   new THREE.MeshBasicMaterial({map:radialTex('255,255,255'),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),true);
@@ -810,7 +802,7 @@ eCd=0,sellCd=0,buyCd=0,copSpawnT=0,menuAng=0,lastWarn=-99;
 /* ============ ВВОД ============ */
 if(isMobile){document.getElementById('mobileUI').classList.add('active');
 document.getElementById('hint').style.display='none';}
-const keys={},mouse={down:false,x:VW/2,y:VH/2};
+const keys={},mouse={down:false,x:innerWidth/2,y:innerHeight/2};
 addEventListener('keydown',e=>{
   keys[e.code]=true;
   if(e.code==='Space')e.preventDefault();
@@ -1493,7 +1485,9 @@ function updatePeds(dt){
   }
 }
 function spawnTraffic(n){
-  let count=0;for(const c in cars)if(c.ai&&!c.cop)count++;
+  /* ВАЖНО: for...of (раньше стоял for...in — счётчик всегда был 0,
+     и машины спавнились КАЖДЫЙ КАДР, что валило GPU — чёрный экран) */
+  let count=0;for(const c of cars)if(c.ai&&!c.cop)count++;
   let tries=0;
   while(count<n&&tries<40){
     tries++;
@@ -1677,13 +1671,20 @@ function syncWorld(){
     sirLight.color.set(on?0xff2233:0x2244ff);
     sirLight.intensity=140;
   }else sirLight.intensity=0;
+  /* СВЕТОФОРЫ: две лампы — активная яркая, неактивная серая.
+     Без столба, парят над стоп-линией. */
   if(tlHeadMesh&&tlGlowMesh){
-    const hg=new THREE.Color(.35,2.2,.7),hr=new THREE.Color(2.4,.3,.4);
+    const gOn=new THREE.Color(.35,2.6,.85),rOn=new THREE.Color(2.7,.32,.48);
+    const off=new THREE.Color(.34,.37,.43);
     const gg=new THREE.Color(.2,1.3,.5),gr=new THREE.Color(1.6,.18,.28);
     for(let i=0;i<tlHeadList.length;i++){
       const h=tlHeadList[i],green=lightGreen(h.axis,h.ci,h.cj);
-      tlHeadMesh.setColorAt(i,green?hg:hr);
-      tlGlowMesh.setColorAt(i,green?gg:gr);
+      if(h.lamp==='g')tlHeadMesh.setColorAt(i,green?gOn:off);
+      else tlHeadMesh.setColorAt(i,green?off:rOn);
+    }
+    for(let i=0;i<tlGlows.length;i++){
+      const h=tlGlows[i];
+      tlGlowMesh.setColorAt(i,lightGreen(h.axis,h.ci,h.cj)?gg:gr);
     }
     tlHeadMesh.instanceColor.needsUpdate=true;
     tlGlowMesh.instanceColor.needsUpdate=true;
@@ -1868,3 +1869,4 @@ resetGame();
 window.__booted=true;
 </script>
 </body>
+</html>

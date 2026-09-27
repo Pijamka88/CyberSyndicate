@@ -171,6 +171,7 @@ const DIRA=[Math.PI/2,0,-Math.PI/2,Math.PI];
 const MAG=12,RELOAD_T=1.3;
 const CAR_HP=40,COP_CAR_HP=70;
 const AMMO_COST=30,CAR_COST=300;
+const TRAFFIC_N=20;
 const BASE={x:378,z:350};
 const BASE_R={x0:364,z0:339,x1:392,z1:361};
 const SHOP={x:586,z:166};
@@ -210,8 +211,6 @@ if(!isMobile){
   composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.9,0.5,0.45));
   composer.addPass(new OutputPass());
 }
-/* Надёжный ресайз: канвасы и композитор получают и размер, и pixel ratio —
-   иначе буфер блума мог рассинхронизироваться с окном (чёрное поле справа) */
 function resize(){
   VW=innerWidth;VH=innerHeight;
   const pr=Math.min(window.devicePixelRatio||1,2);
@@ -236,7 +235,7 @@ scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0xcfdaff,size:1.7,s
 /* ============ ГЕНЕРАЦИЯ ГОРОДА ============ */
 const boxes=[];
 const solids=[],wins=[],signsArr=[],trunks=[],leaves=[],lampPoles=[],lampHeads=[],poolsA=[],
-tlHeadList=[],tlGlows=[],benches=[],lotRects=[],pondList=[],swimPools=[];
+tlHeadList=[],tlGlows=[],benches=[],lotRects=[],pondList=[],swimPools=[],poolDeck=[];
 const blockPark=[],blockLot=[];
 for(let i=0;i<GRID;i++){
   blockPark[i]=[];blockLot[i]=[];
@@ -292,19 +291,23 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
   for(let k=0;k<nk;k++)solids.push({x:bx+sRand(VS,w-VS),y:bh*VS+VS*.25,z:bz+sRand(VS,d-VS),
     sx:VS*sRand(.4,.7),sy:VS*sRand(.3,.5),sz:VS*sRand(.4,.7),c:base.clone().multiplyScalar(.6)});
   if(!winCol){
+    /* ВЫВЕСКИ: тонкие панели (0.6), примонтированы ВПЛОТНУЮ к фасаду —
+       не выпирают из здания */
     for(let iy=1;iy<bh-1;iy++){
       if(srng()<.4)continue;
       const sc=signCols[(srng()*3)|0];
       const cy=iy*VS+VS/2;
       if(srng()<.5){
+        /* вертикальная полоса у края стены, толщина 0.6 наружу */
         const side=srng()<.5;
-        const zz=bz+(side?sRand(.5,SIGN_W-.5):d-sRand(.5,SIGN_W-.5));
-        if(srng()<.5)signsArr.push({x:bx-1.4,y:cy,z:zz,sx:1.8,sy:VS*.8,sz:1.8,c:sc});
-        else signsArr.push({x:bx+w+1.4,y:cy,z:zz,sx:1.8,sy:VS*.8,sz:1.8,c:sc});
+        const zz=bz+(side?sRand(1,SIGN_W-1):d-sRand(1,SIGN_W-1));
+        if(srng()<.5)signsArr.push({x:bx-.3,y:cy,z:zz,sx:.6,sy:VS*.8,sz:1.6,c:sc});
+        else signsArr.push({x:bx+w+.3,y:cy,z:zz,sx:.6,sy:VS*.8,sz:1.6,c:sc});
       }else{
+        /* горизонтальная панель вдоль края стены, толщина 0.6 наружу */
         const len=sRand(8,Math.max(9,Math.min(w,d)-SIGN_W));
-        if(srng()<.5)signsArr.push({x:bx-1.4,y:cy,z:bz+sRand(.8,SIGN_W-1),sx:1.8,sy:2.2,sz:len,c:sc});
-        else signsArr.push({x:bx+sRand(.8,SIGN_W-1),y:cy,z:bz-1.4,sx:len,sy:2.2,sz:1.8,c:sc});
+        if(srng()<.5)signsArr.push({x:bx-.3,y:cy,z:bz+sRand(1,SIGN_W-1),sx:.6,sy:2,sz:len,c:sc});
+        else signsArr.push({x:bx+sRand(1,SIGN_W-1),y:cy,z:bz-.3,sx:len,sy:2,sz:.6,c:sc});
       }
     }
     if(srng()<.35){
@@ -391,23 +394,38 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
       poolsA.push({x:lx,z:lz});
     }
   }
-  /* СВЕТОФОРЫ: БЕЗ СТОЛБА — две парящие лампы (зелёная + красная)
-     на центре каждой стоп-линии; неактивная лампа — серая */
+  /* СВЕТОФОРЫ: две парящие лампы (зелёная + красная, неактивная серая) */
   for(let i=0;i<GRID;i++)for(let j=0;j<GRID;j++){
     const cx=i*CELL,cz=j*CELL,sl=AW+8;
     for(const s of[-1,1]){
       const px=cx+s*sl;
       if(px<8||px>WORLD-8)continue;
-      tlHeadList.push({x:px,y:5.5,z:cz-1.2,sx:1.4,sy:1.4,sz:1.4,axis:0,ci:i,cj:j,lamp:'g',c:new THREE.Color(0x35ff77)});
-      tlHeadList.push({x:px,y:5.5,z:cz+1.2,sx:1.4,sy:1.4,sz:1.4,axis:0,ci:i,cj:j,lamp:'r',c:new THREE.Color(0xff2a3c)});
+      tlHeadList.push({x:px,y:5.5,z:cz-1.2,sx:1.4,sy:1.4,sz:1.4,axis:0,ci:i,cj:j,lamp:'g'});
+      tlHeadList.push({x:px,y:5.5,z:cz+1.2,sx:1.4,sy:1.4,sz:1.4,axis:0,ci:i,cj:j,lamp:'r'});
       tlGlows.push({x:px,y:.14,z:cz,sx:16,sz:16,axis:0,ci:i,cj:j,c:new THREE.Color(.15,1.0,.35)});
     }
     for(const s of[-1,1]){
       const pz=cz+s*sl;
       if(pz<8||pz>WORLD-8)continue;
-      tlHeadList.push({x:cx-1.2,y:5.5,z:pz,sx:1.4,sy:1.4,sz:1.4,axis:1,ci:i,cj:j,lamp:'g',c:new THREE.Color(0x35ff77)});
-      tlHeadList.push({x:cx+1.2,y:5.5,z:pz,sx:1.4,sy:1.4,sz:1.4,axis:1,ci:i,cj:j,lamp:'r',c:new THREE.Color(0xff2a3c)});
+      tlHeadList.push({x:cx-1.2,y:5.5,z:pz,sx:1.4,sy:1.4,sz:1.4,axis:1,ci:i,cj:j,lamp:'g'});
+      tlHeadList.push({x:cx+1.2,y:5.5,z:pz,sx:1.4,sy:1.4,sz:1.4,axis:1,ci:i,cj:j,lamp:'r'});
       tlGlows.push({x:cx,y:.14,z:pz,sx:16,sz:16,axis:1,ci:i,cj:j,c:new THREE.Color(.15,1.0,.35)});
+    }
+  }
+})();
+
+/* БАССЕЙНЫ: воксельная плиточная палуба по периметру */
+(function buildPoolDecks(){
+  const tileC=new THREE.Color(0x9aa8b2);
+  for(const p of swimPools){
+    const x1=p.x+p.w,z1=p.z+p.d;
+    for(let x=p.x-1;x<=x1+1;x+=1){
+      poolDeck.push({x,y:.3,z:p.z-1,sx:1,sy:.6,sz:1,c:tileC.clone().multiplyScalar(rand(.8,1.05))});
+      poolDeck.push({x,y:.3,z:z1+1,sx:1,sy:.6,sz:1,c:tileC.clone().multiplyScalar(rand(.8,1.05))});
+    }
+    for(let z=p.z;z<=z1;z+=1){
+      poolDeck.push({x:p.x-1,y:.3,z,sx:1,sy:.6,sz:1,c:tileC.clone().multiplyScalar(rand(.8,1.05))});
+      poolDeck.push({x:x1+1,y:.3,z,sx:1,sy:.6,sz:1,c:tileC.clone().multiplyScalar(rand(.8,1.05))});
     }
   }
 })();
@@ -443,9 +461,10 @@ const cCyan=new THREE.Color(0,1.6,1.9),cGreen=new THREE.Color(.2,1.9,.8),cPink=n
   addWallSeg(310,312,314,314,2,0x4a3a50);
   addWallSeg(298,300,300,312,2,0x4a3a50);
   addWallSeg(312,300,314,312,2,0x4a3a50);
-  signsArr.push({x:378,y:6.4,z:360.9,sx:11,sy:1.6,sz:1,c:cCyan});
-  signsArr.push({x:586,y:4.8,z:173.9,sx:9,sy:1.6,sz:1,c:cGreen});
-  signsArr.push({x:306,y:4.8,z:313.9,sx:9,sy:1.6,sz:1,c:cPink});
+  /* вывески над входами — примонтированы вплотную к стене */
+  signsArr.push({x:378,y:6.4,z:360.7,sx:11,sy:1.6,sz:.5,c:cCyan});
+  signsArr.push({x:586,y:4.8,z:173.7,sx:9,sy:1.6,sz:.5,c:cGreen});
+  signsArr.push({x:306,y:4.8,z:313.7,sx:9,sy:1.6,sz:.5,c:cPink});
 })();
 
 /* земля с текстурой дороги */
@@ -467,11 +486,11 @@ function makeGroundTexture(){
     g.fillStyle='#1a4a66';
     g.beginPath();g.ellipse(X(p.x),X(p.z),p.rx*.7*k,p.rz*.7*k,0,0,TAU);g.fill();
   }
+  /* бассейны: палуба + вода на текстуре */
   for(const p of swimPools){
-    g.fillStyle='#3a4148';g.fillRect(X(p.x-2.5),X(p.z-2.5),(p.w+5)*k,(p.d+5)*k);
-    g.fillStyle='#4d565f';g.fillRect(X(p.x-1),X(p.z-1),(p.w+2)*k,(p.d+2)*k);
-    g.fillStyle='#0c4157';g.fillRect(X(p.x),X(p.z),p.w*k,p.d*k);
-    g.fillStyle='#16608a';g.fillRect(X(p.x+1.5),X(p.z+1.5),(p.w-3)*k,(p.d-3)*k);
+    g.fillStyle='#454e56';g.fillRect(X(p.x-1.5),X(p.z-1.5),(p.w+3)*k,(p.d+3)*k);
+    g.fillStyle='#0d4a63';g.fillRect(X(p.x),X(p.z),p.w*k,p.d*k);
+    g.fillStyle='#1a7fae';g.fillRect(X(p.x+1.5),X(p.z+1.5),(p.w-3)*k,(p.d-3)*k);
   }
   for(const L of lotRects){
     const cx=(L.x0+L.x1)/2,cz=(L.z0+L.z1)/2;
@@ -527,20 +546,30 @@ function radialTex(rgb){
   g.fillStyle=gr;g.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);
 }
 
-/* ТУМАН ПО ПЕРИМЕТРУ: мягкая дымка, без плотной "чёрной стены".
-   Плотная часть градиента вынесена за пределы видимости камеры */
-{const S=512,c=document.createElement('canvas');c.width=c.height=S;
- const g=c.getContext('2d');
- const gr=g.createRadialGradient(256,256,0,256,256,256);
- gr.addColorStop(0,'rgba(24,32,58,0)');
- gr.addColorStop(.46,'rgba(24,32,58,0)');
- gr.addColorStop(.58,'rgba(24,32,58,.35)');
- gr.addColorStop(.72,'rgba(24,32,58,.7)');
- gr.addColorStop(1,'rgba(24,32,58,.95)');
- g.fillStyle=gr;g.fillRect(0,0,S,S);
- const fogRing=new THREE.Mesh(new THREE.PlaneGeometry(WORLD*2,WORLD*2).rotateX(-Math.PI/2),
-   new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthWrite:false,toneMapped:false}));
- fogRing.position.set(WORLD/2,.45,WORLD/2);scene.add(fogRing);}
+/* ТУМАН ПО ПЕРИМЕТРУ: три мягких концентрических слоя дымки
+   с плавным нарастанием к краю карты */
+(function makeFog(){
+  const rgb='22,30,56'; /* чуть светлее фона неба — читается как дымка */
+  function ring(size,stops,op){
+    const S=256,c=document.createElement('canvas');c.width=c.height=S;
+    const g=c.getContext('2d');
+    const gr=g.createRadialGradient(128,128,0,128,128,128);
+    gr.addColorStop(0,`rgba(${rgb},0)`);
+    for(const[p,a]of stops)gr.addColorStop(p,`rgba(${rgb},${a})`);
+    gr.addColorStop(1,`rgba(${rgb},.9)`);
+    g.fillStyle=gr;g.fillRect(0,0,S,S);
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(size,size).rotateX(-Math.PI/2),
+      new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true,opacity:op,
+        depthWrite:false,toneMapped:false}));
+    return m;
+  }
+  const layers=[
+    ring(WORLD*1.25,[[.5,0],[.75,.3]],1),
+    ring(WORLD*1.65,[[.42,0],[.7,.28]],1),
+    ring(WORLD*2.15,[[.36,0],[.62,.3]],1)
+  ];
+  layers.forEach((m,i)=>{m.position.set(WORLD/2,.42+i*.03,WORLD/2);scene.add(m);});
+})();
 
 function mkInst(list,geo,mat,useColor){
   if(!list.length)return null;
@@ -557,6 +586,7 @@ const unitBox=new THREE.BoxGeometry(1,1,1);
 const glowPlaneGeo=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2);
 mkInst(solids,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(benches,unitBox,new THREE.MeshLambertMaterial(),true);
+mkInst(poolDeck,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(wins,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
 mkInst(signsArr,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
 mkInst(trunks,unitBox,new THREE.MeshLambertMaterial(),true);
@@ -573,17 +603,24 @@ for(const p of pondList){
     new THREE.MeshBasicMaterial({map:radialTex('60,160,220'),transparent:true,opacity:.4,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
   w.position.set(p.x,.15,p.z);scene.add(w);
 }
-const poolWaters=[];
+/* ВОДА БАССЕЙНОВ: светящаяся плоскость + дрейфующие блики */
+const poolWaters=[],poolGlints=[];
 for(const p of swimPools){
-  const w=new THREE.Mesh(new THREE.PlaneGeometry(p.w-1,p.d-1).rotateX(-Math.PI/2),
-    new THREE.MeshBasicMaterial({color:new THREE.Color(.25,1.3,1.6),transparent:true,opacity:.4,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
-  w.position.set(p.x+p.w/2,.2,p.z+p.d/2);scene.add(w);poolWaters.push(w);
-  for(let i=0;i<4;i++){
+  const w=new THREE.Mesh(new THREE.PlaneGeometry(p.w-1.4,p.d-1.4).rotateX(-Math.PI/2),
+    new THREE.MeshBasicMaterial({color:new THREE.Color(.35,1.6,1.9),transparent:true,opacity:.5,
+      depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
+  w.position.set(p.x+p.w/2,.14,p.z+p.d/2);scene.add(w);poolWaters.push(w);
+  for(let i=0;i<6;i++){
     const sp=new THREE.Mesh(glowPlaneGeo,
-      new THREE.MeshBasicMaterial({map:radialTex('160,240,255'),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
-    sp.scale.set(sRand(3,6),1,sRand(3,6));
-    sp.position.set(p.x+sRand(3,p.w-3),.25,p.z+sRand(3,p.d-3));
-    scene.add(sp);poolWaters.push(sp);
+      new THREE.MeshBasicMaterial({map:radialTex('170,240,255'),transparent:true,opacity:.55,
+        depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
+    const sc=rand(2,4.5);
+    sp.scale.set(sc,1,sc);
+    scene.add(sp);
+    poolGlints.push({m:sp,
+      bx:p.x+rand(3,p.w-3),bz:p.z+rand(3,p.d-3),
+      ax:rand(1.5,3.5),az:rand(1.5,3.5),
+      px:rand(0,TAU),pz:rand(0,TAU)});
   }
 }
 function mkPad(x,z,w,h,hex){
@@ -608,7 +645,7 @@ const salonDoorGlow=mkDoorGlow(306,313.2,cPink);
 const headGlowMat=new THREE.MeshBasicMaterial({map:radialTex('255,235,180'),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
 const tailGlowMat=new THREE.MeshBasicMaterial({map:radialTex('255,50,40'),transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
 const carRigs=[];
-{const N=isMobile?2:3;
+{const N=isMobile?3:4;
 for(let i=0;i<N;i++){
   const hL=new THREE.SpotLight(0xffe2b0,0,80,0.55,0.5,1.6);
   const hR=new THREE.SpotLight(0xffe2b0,0,80,0.55,0.5,1.6);
@@ -1485,19 +1522,17 @@ function updatePeds(dt){
   }
 }
 function spawnTraffic(n){
-  /* ВАЖНО: for...of (раньше стоял for...in — счётчик всегда был 0,
-     и машины спавнились КАЖДЫЙ КАДР, что валило GPU — чёрный экран) */
   let count=0;for(const c of cars)if(c.ai&&!c.cop)count++;
   let tries=0;
-  while(count<n&&tries<40){
+  while(count<n&&tries<60){
     tries++;
     const ri=1+sri(GRID-1),line=R[ri],vert=Math.random()<.5;
     const dir=vert?(Math.random()<.5?1:3):(Math.random()<.5?0:2);
     const off=laneOff(dir);
-    const along=clamp((vert?player.z:player.x)+rand(60,180)*(Math.random()<.5?-1:1),25,WORLD-25);
+    const along=clamp((vert?player.z:player.x)+rand(50,190)*(Math.random()<.5?-1:1),25,WORLD-25);
     const x=vert?line+off.x:along,z=vert?along:line+off.z;
-    if(dist2(x,z,player.x,player.z)<50)continue;
-    if(cars.some(c=>dist2(x,z,c.x,c.z)<24))continue;
+    if(dist2(x,z,player.x,player.z)<40)continue;
+    if(cars.some(c=>dist2(x,z,c.x,c.z)<22))continue;
     const car=makeCar(x,z,DIRA[dir],CAR_COLORS[sri(8)],false);
     car.ai=true;car.dir=dir;car.cruise=rand(9,13);car.nc=nextNC(car);
     cars.push(car);count++;
@@ -1506,11 +1541,11 @@ function spawnTraffic(n){
 function despawnTraffic(){
   for(let i=cars.length-1;i>=0;i--){
     const c=cars[i];
-    if(c.ai&&!c.cop&&dist2(c.x,c.z,player.x,player.z)>240)removeCar(i);
+    if(c.ai&&!c.cop&&dist2(c.x,c.z,player.x,player.z)>230)removeCar(i);
   }
 }
 function spawnParked(){
-  for(let k=0;k<16;k++){
+  for(let k=0;k<18;k++){
     const ri=1+sri(GRID-1),line=R[ri],vert=Math.random()<.5;
     const along=rand(50,WORLD-50),side=Math.random()<.5?1:-1,o=AW+2.6;
     const x=vert?line+side*o:along,z=vert?along:line+side*o;
@@ -1566,7 +1601,7 @@ function update(dt){
   updateBullets(dt);
   updateParts(dt);
   updatePickups(dt);
-  spawnTraffic(12);despawnTraffic();
+  spawnTraffic(TRAFFIC_N);despawnTraffic();
   if(player.hp<=0&&state==='play')die();
   shake=Math.max(0,shake-dt*16);
   hurtT=Math.max(0,hurtT-dt);
@@ -1630,9 +1665,15 @@ function syncWorld(){
   for(const c of cops)if(!c.dead)putShadow(c.x,c.z,3);
   if(!player.inCar)putShadow(player.x,player.z,3);
   shadowMesh.count=si;shadowMesh.instanceMatrix.needsUpdate=true;
+  /* вода бассейнов: пульс + дрейфующие блики */
   for(let i=0;i<poolWaters.length;i++){
-    const w=poolWaters[i];
-    w.material.opacity=.3+.18*Math.sin(t*1.8+i*1.7);
+    poolWaters[i].material.opacity=.4+.15*Math.sin(t*1.6+i*1.3);
+  }
+  for(const g of poolGlints){
+    g.m.position.set(
+      g.bx+Math.sin(t*.55+g.px)*g.ax,.2,
+      g.bz+Math.cos(t*.4+g.pz)*g.az);
+    g.m.material.opacity=.35+.3*Math.sin(t*2.2+g.px+g.pz);
   }
   if(player.inCar&&!player.inCar.dead){
     const c=player.inCar;
@@ -1671,8 +1712,6 @@ function syncWorld(){
     sirLight.color.set(on?0xff2233:0x2244ff);
     sirLight.intensity=140;
   }else sirLight.intensity=0;
-  /* СВЕТОФОРЫ: две лампы — активная яркая, неактивная серая.
-     Без столба, парят над стоп-линией. */
   if(tlHeadMesh&&tlGlowMesh){
     const gOn=new THREE.Color(.35,2.6,.85),rOn=new THREE.Color(2.7,.32,.48);
     const off=new THREE.Color(.34,.37,.43);
@@ -1846,7 +1885,7 @@ function resetGame(){
   player.x=BASE.x;player.z=366;player.hp=100;player.ammo=MAG;player.reload=0;player.inCar=null;
   playerH.g.visible=true;
   camCX=player.x;camCZ=player.z;camHcur=76;
-  spawnParked();spawnLotCars();spawnTraffic(12);
+  spawnParked();spawnLotCars();spawnTraffic(TRAFFIC_N);
   for(let i=0;i<20;i++)updatePeds(0);
 }
 document.getElementById('btnStart').addEventListener('click',()=>{

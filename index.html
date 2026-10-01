@@ -60,7 +60,7 @@ button:hover{background:#ff003c;color:#fff;transform:translateY(-2px)}
 #mobileUI.active{display:block}
 .joystick{position:absolute;bottom:40px;width:120px;height:120px;border-radius:50%;
 background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.2);pointer-events:auto;touch-action:none}
-.joystick-inner{position:absolute;top:50%;left:50%;;width:50px;height:50px;margin:-25px;border-radius:50%;
+.joystick-inner{position:absolute;top:50%;left:50%;width:50px;height:50px;margin:-25px;border-radius:50%;
 background:rgba(255,255,255,.3);border:2px solid rgba(255,255,255,.4)}
 #joyMove{left:40px}#joyAim{right:40px}
 .mbtn{position:absolute;pointer-events:auto;touch-action:none;background:rgba(255,255,255,.1);
@@ -162,8 +162,8 @@ const sRand=(a,b)=>a+srng()*(b-a);
 function fmt(t){const m=(t/60)|0,s=(t%60)|0;return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');}
 const isMobile=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
 
-/* ============ КОНСТАНТЫ МИРА ============ */
-const GRID=6,CELL=140,WORLD=GRID*CELL;
+/* ============ КОНСТАНТЫ МИРА (город 8x8 кварталов) ============ */
+const GRID=8,CELL=140,WORLD=GRID*CELL;
 const R=[];for(let i=0;i<=GRID;i++)R.push(i*CELL);
 const AW=9,LANE=4.5,VS=8;
 const DIRS=[{x:1,z:0},{x:0,z:1},{x:-1,z:0},{x:0,z:-1}];
@@ -171,8 +171,7 @@ const DIRA=[Math.PI/2,0,-Math.PI/2,Math.PI];
 const MAG=12,RELOAD_T=1.3;
 const CAR_HP=40,COP_CAR_HP=70;
 const AMMO_COST=30,CAR_COST=300;
-const TRAFFIC_N=20;
-/* порог повреждений, при котором машина горит и дымит */
+const TRAFFIC_N=30;
 const BURN_FRAC=0.45;
 const BASE={x:378,z:350};
 const BASE_R={x0:364,z0:339,x1:392,z1:361};
@@ -194,7 +193,7 @@ const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
 const fxc=document.getElementById('fx'),fctx=fxc.getContext('2d');
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x0e1226);
-const camera=new THREE.PerspectiveCamera(42,1,0.1,1600);
+const camera=new THREE.PerspectiveCamera(42,1,0.1,2000);
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.3;
 
@@ -209,7 +208,7 @@ let VW=0,VH=0,composer=null;
 if(!isMobile){
   composer=new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene,camera));
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),1.1,0.6,0.4));
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),1.15,0.65,0.35));
   composer.addPass(new OutputPass());
 }
 function resize(){
@@ -229,14 +228,14 @@ resize();
 /* звёзды */
 {const n=700,pos=new Float32Array(n*3);
 for(let i=0;i<n;i++){let x=rand(-1,1),y=rand(.12,1),z=rand(-1,1);
-const l=Math.hypot(x,y,z);pos[i*3]=x/l*900;pos[i*3+1]=y/l*900;pos[i*3+2]=z/l*900;}
+const l=Math.hypot(x,y,z);pos[i*3]=x/l*1100;pos[i*3+1]=y/l*1100;pos[i*3+2]=z/l*1100;}
 const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));
 scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0xcfdaff,size:1.7,sizeAttenuation:false,transparent:true,opacity:.8})));}
 
 /* ============ ГЕНЕРАЦИЯ ГОРОДА ============ */
 const boxes=[];
 const solids=[],wins=[],signsArr=[],signGlows=[],trunks=[],leaves=[],lampPoles=[],lampHeads=[],
-tlHeadList=[],tlGlows=[],benches=[],lotRects=[],pondList=[],swimPools=[],poolDeck=[],tapeList=[];
+tlHeadList=[],tlGlows=[],benches=[],lotRects=[],pondList=[],swimPools=[],poolDeck=[];
 const blockPark=[],blockLot=[];
 for(let i=0;i<GRID;i++){
   blockPark[i]=[];blockLot[i]=[];
@@ -250,13 +249,14 @@ for(let i=0;i<GRID;i++){
 
 function nearPad(x,z,m){
   for(const r of[BASE_R,SHOP_R,SALON_R])
-    if(x>r.x0-4-m&&x<r.x1+4+m&&z>r.z0-4-m&&z>r.z1+4+m)return true;
+    if(x>r.x0-4-m&&x<r.x1+4+m&&z>r.z0-4-m&&z<r.z1+4+m)return true;
   return dist2(x,z,DEALER.x,DEALER.z)<DEALER.r+m;
 }
 
 const palette=['#6e6250','#5c5850','#756752','#2e3a58','#3d2f52','#254652','#6d5f4a','#3a4a38',
 '#6b4650','#4a5a3a','#4a3a2e','#2f4a44','#54405e','#333850','#5e3a3a','#3a5258'];
-const signCols=[new THREE.Color(4.4,4.0,.45),new THREE.Color(4.6,1.0,3.0),new THREE.Color(.45,4.4,4.6)];
+/* неон: очень яркий HDR + БОЛЬШИЕ рассеянные ореолы */
+const signCols=[new THREE.Color(5.2,4.8,.55),new THREE.Color(5.4,1.2,3.5),new THREE.Color(.55,5.2,5.4)];
 const winCols=[new THREE.Color(1.35,1.05,.55),new THREE.Color(.55,1.15,1.4),new THREE.Color(1.3,.6,.9)];
 
 function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
@@ -268,7 +268,6 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
     const c=base.clone().multiplyScalar(sRand(.75,1.15));
     solids.push({x:bx+ix*VS+VS/2,y:iy*VS+VS/2,z:bz+iz*VS+VS/2,sx:VS,sy:VS,sz:VS,c});
   }
-  /* окна: центр стены, угловые воксели — под неон */
   const SIGN_W=2.6;
   for(let iy=1;iy<bh-1;iy++){
     for(let iz=0;iz<bd;iz++){
@@ -291,7 +290,6 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
   const nk=2+(srng()*3|0);
   for(let k=0;k<nk;k++)solids.push({x:bx+sRand(VS,w-VS),y:bh*VS+VS*.25,z:bz+sRand(VS,d-VS),
     sx:VS*sRand(.4,.7),sy:VS*sRand(.3,.5),sz:VS*sRand(.4,.7),c:base.clone().multiplyScalar(.6)});
-  /* неон: панели в плоскости стены + мягкие ореолы */
   if(!winCol){
     const G=.4;
     for(let iy=1;iy<bh-1;iy++){
@@ -305,13 +303,16 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
           const zz=bz+(near?sRand(1.2,SIGN_W-.9):d-sRand(1.2,SIGN_W-.9));
           const cy=iy*VS+VS/2;
           signsArr.push({x:fx,y:cy,z:zz,sx:G,sy:VS*.8,sz:1.6,c:sc});
-          signGlows.push({x:fx,y:cy,z:zz,sx:G+1.3,sy:VS*1.05,sz:3.4,c:sc.clone().multiplyScalar(.38)});
+          /* два слоя рассеянного свечения: широкий + очень широкий */
+          signGlows.push({x:fx,y:cy,z:zz,sx:G+2.4,sy:VS*1.25,sz:5,c:sc.clone().multiplyScalar(.5)});
+          signGlows.push({x:fx,y:cy,z:zz,sx:G+4.5,sy:VS*1.7,sz:8.5,c:sc.clone().multiplyScalar(.22)});
         }else{
           const len=sRand(8,Math.max(9,d-4));
           const z0=bz+sRand(2,Math.max(3,d-2-len));
           const cy=iy*VS;
           signsArr.push({x:fx,y:cy,z:z0+len/2,sx:G,sy:1.8,sz:len,c:sc});
-          signGlows.push({x:fx,y:cy,z:z0+len/2,sx:G+1.3,sy:3.4,sz:len+1.6,c:sc.clone().multiplyScalar(.38)});
+          signGlows.push({x:fx,y:cy,z:z0+len/2,sx:G+2.4,sy:4.4,sz:len+3,c:sc.clone().multiplyScalar(.5)});
+          signGlows.push({x:fx,y:cy,z:z0+len/2,sx:G+4.5,sy:7,sz:len+6,c:sc.clone().multiplyScalar(.22)});
         }
       }else{
         const fz=wall===2?bz+G/2-.15:bz+d-G/2+.15;
@@ -320,13 +321,15 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
           const xx=bx+(near?sRand(1.2,SIGN_W-.9):w-sRand(1.2,SIGN_W-.9));
           const cy=iy*VS+VS/2;
           signsArr.push({x:xx,y:cy,z:fz,sx:1.6,sy:VS*.8,sz:G,c:sc});
-          signGlows.push({x:xx,y:cy,z:fz,sx:3.4,sy:VS*1.05,sz:G+1.3,c:sc.clone().multiplyScalar(.38)});
+          signGlows.push({x:xx,y:cy,z:fz,sx:5,sy:VS*1.25,sz:G+2.4,c:sc.clone().multiplyScalar(.5)});
+          signGlows.push({x:xx,y:cy,z:fz,sx:8.5,sy:VS*1.7,sz:G+4.5,c:sc.clone().multiplyScalar(.22)});
         }else{
           const len=sRand(8,Math.max(9,w-4));
           const x0=bx+sRand(2,Math.max(3,w-2-len));
           const cy=iy*VS;
           signsArr.push({x:x0+len/2,y:cy,z:fz,sx:len,sy:1.8,sz:G,c:sc});
-          signGlows.push({x:x0+len/2,y:cy,z:fz,sx:len+1.6,sy:3.4,sz:G+1.3,c:sc.clone().multiplyScalar(.38)});
+          signGlows.push({x:x0+len/2,y:cy,z:fz,sx:len+3,sy:4.4,sz:G+2.4,c:sc.clone().multiplyScalar(.5)});
+          signGlows.push({x:x0+len/2,y:cy,z:fz,sx:len+6,sy:7,sz:G+4.5,c:sc.clone().multiplyScalar(.22)});
         }
       }
     }
@@ -335,7 +338,8 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
       const bl=Math.min(w-4,sRand(14,26));
       const by=bh*VS+2.6;
       signsArr.push({x:bx+w/2,y:by,z:bz+d/2,sx:bl,sy:3.2,sz:1.4,c:sc});
-      signGlows.push({x:bx+w/2,y:by,z:bz+d/2,sx:bl+2,sy:4.6,sz:3.4,c:sc.clone().multiplyScalar(.4)});
+      signGlows.push({x:bx+w/2,y:by,z:bz+d/2,sx:bl+3,sy:5.5,sz:4.5,c:sc.clone().multiplyScalar(.5)});
+      signGlows.push({x:bx+w/2,y:by,z:bz+d/2,sx:bl+6,sy:8,sz:8,c:sc.clone().multiplyScalar(.22)});
     }
   }
 }
@@ -393,7 +397,7 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
     }
     if(srng()<.55){
       for(let t=0;t<10;t++){
-        const pw=sRand(16,26),pd=sRand(12,20);
+        const pw=sRand(16,28),pd=sRand(12,22);
         const px_=sRand(x0+8,Math.max(x0+9,x1-8-pw)),pz_=sRand(z0+8,Math.max(z0+9,z1-8-pd));
         if(nearPad(px_+pw/2,pz_+pd/2,10))continue;
         let ok=true;
@@ -406,7 +410,6 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
       }
     }
   }
-  /* фонари: столб + светящаяся головка */
   for(let i=0;i<=GRID;i++)for(let j=0;j<=GRID;j++){
     const x=i*CELL,z=j*CELL,o=AW+2.5;
     for(const s of[[-o,-o],[o,o]]){
@@ -416,7 +419,6 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
       lampHeads.push({x:lx,y:7.1,z:lz,sx:1.1,sy:.6,sz:1.1});
     }
   }
-  /* светофоры: две парящие лампы на стоп-линии */
   for(let i=0;i<GRID;i++)for(let j=0;j<GRID;j++){
     const cx=i*CELL,cz=j*CELL,sl=AW+8;
     for(const s of[-1,1]){
@@ -434,36 +436,21 @@ function addBuilding(bx,bz,bw,bd,bh,forcedCol,winCol){
       tlGlows.push({x:cx,y:.14,z:pz,axis:1,ci:i,cj:j});
     }
   }
-  /* ЧЁРНО-ЖЁЛТАЯ СИГНАЛЬНАЯ ЛЕНТА по всему периметру карты */
-  {
-    const yC=new THREE.Color(1.9,1.7,.22),bC=new THREE.Color(.05,.05,.06);
-    const seg=3;
-    let idx=0;
-    for(let x=0;x<WORLD;x+=seg,idx++){
-      const c=(idx%2===0)?yC:bC;
-      tapeList.push({x:x+seg/2,y:.55,z:1.4,sx:seg,sy:1.1,sz:2.2,c});
-      tapeList.push({x:x+seg/2,y:.55,z:WORLD-1.4,sx:seg,sy:1.1,sz:2.2,c});
-    }
-    for(let z=seg;z<WORLD-seg;z+=seg,idx++){
-      const c=(idx%2===0)?yC:bC;
-      tapeList.push({x:1.4,y:.55,z:z+seg/2,sx:2.2,sy:1.1,sz:seg,c});
-      tapeList.push({x:WORLD-1.4,y:.55,z:z+seg/2,sx:2.2,sy:1.1,sz:seg,c});
-    }
-  }
 })();
 
-/* БАССЕЙНЫ: воксельная палуба */
+/* БАССЕЙНЫ: двухцветная плиточная палуба-шахматка (без анимации) */
 (function buildPoolDecks(){
-  const tileC=new THREE.Color(0x9aa8b2);
+  const cA=new THREE.Color(0xa8b6c0),cB=new THREE.Color(0x8b98a2);
   for(const p of swimPools){
     const x1=p.x+p.w,z1=p.z+p.d;
-    for(let x=p.x-1;x<=x1+1;x+=1){
-      poolDeck.push({x,y:.3,z:p.z-1,sx:1,sy:.6,sz:1,c:tileC.clone().multiplyScalar(rand(.8,1.05))});
-      poolDeck.push({x,y:.3,z:z1+1,sx:1,sy:.6,sz:1,c:tileC.clone().multiplyScalar(rand(.8,1.05))});
+    let k=0;
+    for(let x=p.x-1.2;x<=x1+1.2;x+=1.2,k++){
+      poolDeck.push({x,y:.3,z:p.z-1.2,sx:1.2,sy:.6,sz:1.2,c:(k%2?cA:cB).clone().multiplyScalar(rand(.9,1.05))});
+      poolDeck.push({x,y:.3,z:z1+1.2,sx:1.2,sy:.6,sz:1.2,c:(k%2?cB:cA).clone().multiplyScalar(rand(.9,1.05))});
     }
-    for(let z=p.z;z<=z1;z+=1){
-      poolDeck.push({x:p.x-1,y:.3,z,sx:1,sy:.6,sz:1,c:tileC.clone().multiplyScalar(rand(.8,1.05))});
-      poolDeck.push({x:x1+1,y:.3,z,sx:1,sy:.6,sz:1,c:tileC.clone().multiplyScalar(rand(.8,1.05))});
+    for(let z=p.z;z<=z1;z+=1.2,k++){
+      poolDeck.push({x:p.x-1.2,y:.3,z,sx:1.2,sy:.6,sz:1.2,c:(k%2?cB:cA).clone().multiplyScalar(rand(.9,1.05))});
+      poolDeck.push({x:x1+1.2,y:.3,z,sx:1.2,sy:.6,sz:1.2,c:(k%2?cA:cB).clone().multiplyScalar(rand(.9,1.05))});
     }
   }
 })();
@@ -500,11 +487,11 @@ const cCyan=new THREE.Color(0,1.6,1.9),cGreen=new THREE.Color(.2,1.9,.8),cPink=n
   addWallSeg(298,300,300,312,2,0x4a3a50);
   addWallSeg(312,300,314,312,2,0x4a3a50);
   signsArr.push({x:378,y:6.4,z:361.15,sx:11,sy:1.6,sz:.35,c:cCyan});
-  signGlows.push({x:378,y:6.4,z:361.15,sx:12.5,sy:2.8,sz:1.6,c:cCyan.clone().multiplyScalar(.4)});
+  signGlows.push({x:378,y:6.4,z:361.15,sx:14,sy:3.6,sz:2.4,c:cCyan.clone().multiplyScalar(.5)});
   signsArr.push({x:586,y:4.8,z:174.15,sx:9,sy:1.6,sz:.35,c:cGreen});
-  signGlows.push({x:586,y:4.8,z:174.15,sx:10.5,sy:2.8,sz:1.6,c:cGreen.clone().multiplyScalar(.4)});
+  signGlows.push({x:586,y:4.8,z:174.15,sx:12,sy:3.6,sz:2.4,c:cGreen.clone().multiplyScalar(.5)});
   signsArr.push({x:306,y:4.8,z:314.15,sx:9,sy:1.6,sz:.35,c:cPink});
-  signGlows.push({x:306,y:4.8,z:314.15,sx:10.5,sy:2.8,sz:1.6,c:cPink.clone().multiplyScalar(.4)});
+  signGlows.push({x:306,y:4.8,z:314.15,sx:12,sy:3.6,sz:2.4,c:cPink.clone().multiplyScalar(.5)});
 })();
 
 /* земля с текстурой дороги */
@@ -526,10 +513,20 @@ function makeGroundTexture(){
     g.fillStyle='#1a4a66';
     g.beginPath();g.ellipse(X(p.x),X(p.z),p.rx*.7*k,p.rz*.7*k,0,0,TAU);g.fill();
   }
+  /* бассейны на текстуре: шахматная палуба + двухтоновая вода */
   for(const p of swimPools){
-    g.fillStyle='#454e56';g.fillRect(X(p.x-1.5),X(p.z-1.5),(p.w+3)*k,(p.d+3)*k);
+    g.fillStyle='#454e56';g.fillRect(X(p.x-1.6),X(p.z-1.6),(p.w+3.2)*k,(p.d+3.2)*k);
     g.fillStyle='#0d4a63';g.fillRect(X(p.x),X(p.z),p.w*k,p.d*k);
-    g.fillStyle='#1a7fae';g.fillRect(X(p.x+1.5),X(p.z+1.5),(p.w-3)*k,(p.d-3)*k);
+    g.fillStyle='#1a86bd';g.fillRect(X(p.x+1.2),X(p.z+1.2),(p.w-2.4)*k,(p.d-2.4)*k);
+    /* светлые дорожки в воде */
+    g.fillStyle='rgba(160,230,255,.28)';
+    if(p.w>p.d){
+      const step=p.d/4;
+      for(let i=1;i<4;i++)g.fillRect(X(p.x+1.2),X(p.z+step*i-.3),(p.w-2.4)*k,.6*k);
+    }else{
+      const step=p.w/4;
+      for(let i=1;i<4;i++)g.fillRect(X(p.x+step*i-.3),X(p.z+1.2),.6*k,(p.d-2.4)*k);
+    }
   }
   for(const L of lotRects){
     const cx=(L.x0+L.x1)/2,cz=(L.z0+L.z1)/2;
@@ -589,6 +586,38 @@ function radialTex(rgb,inner){
   g.fillStyle=gr;g.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);
 }
 
+/* ЧЁРНО-ЖЁЛТАЯ ЛЕНТА «/» ПО ПЕРИМЕТРУ: диагональные полосы на барьерах */
+(function makeTape(){
+  const S=128,c=document.createElement('canvas');c.width=c.height=S;
+  const g=c.getContext('2d');
+  g.fillStyle='#f2c500';g.fillRect(0,0,S,S);
+  g.fillStyle='#0a0a0c';
+  const w=S*.28;
+  for(let o=-S;o<S*2;o+=S*.56){
+    g.beginPath();
+    g.moveTo(o,S);g.lineTo(o+S,0);g.lineTo(o+S+w,0);g.lineTo(o+w,S);
+    g.closePath();g.fill();
+  }
+  const tex=new THREE.CanvasTexture(c);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+  tex.colorSpace=THREE.SRGBColorSpace;
+  const H=1.5,Y=H/2;
+  function ribbon(len,rx,ry,x,z,rotY){
+    const t2=tex.clone();t2.needsUpdate=true;
+    t2.wrapS=THREE.RepeatWrapping;
+    t2.repeat.set(len/3,1);
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(len,H),
+      new THREE.MeshBasicMaterial({map:t2,side:THREE.DoubleSide,toneMapped:false}));
+    m.rotation.y=rotY;
+    m.position.set(x,Y,z);
+    scene.add(m);
+  }
+  ribbon(WORLD,0,0,WORLD/2,1.2,0);                 /* север, смотрит на юг */
+  ribbon(WORLD,0,0,WORLD/2,WORLD-1.2,0);           /* юг */
+  ribbon(WORLD,0,0,1.2,WORLD/2,Math.PI/2);         /* запад */
+  ribbon(WORLD,0,0,WORLD-1.2,WORLD/2,Math.PI/2);   /* восток */
+})();
+
 function mkInst(list,geo,mat,useColor){
   if(!list.length)return null;
   const im=new THREE.InstancedMesh(geo,mat,list.length);
@@ -607,16 +636,14 @@ mkInst(benches,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(poolDeck,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(wins,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
 mkInst(signsArr,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
-mkInst(signGlows,unitBox,new THREE.MeshBasicMaterial({transparent:true,opacity:.32,
+/* рассеянное свечение неона: два слоя ореолов */
+mkInst(signGlows,unitBox,new THREE.MeshBasicMaterial({transparent:true,opacity:.38,
   blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false}),true);
-/* сигнальная лента периметра */
-mkInst(tapeList,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
 mkInst(trunks,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(leaves,unitBox,new THREE.MeshLambertMaterial(),true);
 mkInst(lampPoles,unitBox,new THREE.MeshLambertMaterial({color:0x39404e}),false);
 mkInst(lampHeads,unitBox,new THREE.MeshBasicMaterial({color:new THREE.Color(2.4,1.8,1.0),toneMapped:false}),false);
 const tlHeadMesh=mkInst(tlHeadList,unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),true);
-/* круглые мягкие световые пятна светофоров */
 const tlGlowMesh=mkInst(tlGlows,glowPlaneGeo,
   new THREE.MeshBasicMaterial({map:radialTex('255,255,255'),transparent:true,opacity:.85,
     depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),true);
@@ -627,7 +654,6 @@ const tlGlowMesh=mkInst(tlGlows,glowPlaneGeo,
    tlGlowMesh.setMatrixAt(i,tlDummy.matrix);
  });
  tlGlowMesh.instanceMatrix.needsUpdate=true;}
-/* круглые тёплые пятна фонарей */
 {const lampGlow=new THREE.InstancedMesh(glowPlaneGeo,
   new THREE.MeshBasicMaterial({map:radialTex('255,208,140'),transparent:true,opacity:.6,
     depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}),lampPoles.length);
@@ -640,25 +666,13 @@ for(const p of pondList){
     new THREE.MeshBasicMaterial({map:radialTex('60,160,220'),transparent:true,opacity:.4,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
   w.position.set(p.x,.15,p.z);scene.add(w);
 }
-/* вода бассейнов */
-const poolWaters=[],poolGlints=[];
+/* вода бассейнов: статичная светящаяся поверхность (без пузырьков) */
+const poolWaters=[];
 for(const p of swimPools){
-  const w=new THREE.Mesh(new THREE.PlaneGeometry(p.w-1.4,p.d-1.4).rotateX(-Math.PI/2),
-    new THREE.MeshBasicMaterial({color:new THREE.Color(.35,1.6,1.9),transparent:true,opacity:.5,
+  const w=new THREE.Mesh(new THREE.PlaneGeometry(p.w-1.6,p.d-1.6).rotateX(-Math.PI/2),
+    new THREE.MeshBasicMaterial({color:new THREE.Color(.4,1.8,2.1),transparent:true,opacity:.45,
       depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
   w.position.set(p.x+p.w/2,.14,p.z+p.d/2);scene.add(w);poolWaters.push(w);
-  for(let i=0;i<6;i++){
-    const sp=new THREE.Mesh(glowPlaneGeo,
-      new THREE.MeshBasicMaterial({map:radialTex('170,240,255'),transparent:true,opacity:.55,
-        depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false}));
-    const sc=rand(2,4.5);
-    sp.scale.set(sc,1,sc);
-    scene.add(sp);
-    poolGlints.push({m:sp,
-      bx:p.x+rand(3,p.w-3),bz:p.z+rand(3,p.d-3),
-      ax:rand(1.5,3.5),az:rand(1.5,3.5),
-      px:rand(0,TAU),pz:rand(0,TAU)});
-  }
 }
 function mkPad(x,z,w,h,hex){
   const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h).rotateX(-Math.PI/2),
@@ -678,7 +692,10 @@ const doorGlow=mkDoorGlow(378,360.2,cCyan);
 const shopDoorGlow=mkDoorGlow(586,173.2,cGreen);
 const salonDoorGlow=mkDoorGlow(306,313.2,cPink);
 
-/* ============ СВЕТ МАШИН ============ */
+/* ============ СВЕТ МАШИН ============
+   фары трафика включаются ТОЛЬКО когда игрок подъезжает:
+   полное свечение ближе 80, плавный спад 80→140, дальше — выключены */
+const HEAD_ON=80,HEAD_OFF=140;
 const headGlowMat=new THREE.MeshBasicMaterial({map:radialTex('255,235,180'),transparent:true,opacity:.5,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
 const tailGlowMat=new THREE.MeshBasicMaterial({map:radialTex('255,50,40'),transparent:true,opacity:.6,depthWrite:false,blending:THREE.AdditiveBlending,toneMapped:false});
 const carRigs=[];
@@ -704,21 +721,29 @@ function updateCarRigs(dt){
   for(const c of cars){
     if(c.dead||c.player||!c.ai)continue;
     const d=dist2(c.x,c.z,px,pz);
-    if(d<220)cand.push({c,d});
+    if(d<HEAD_OFF)cand.push({c,d});
   }
   cand.sort((a,b)=>a.d-b.d);
   for(let i=0;i<carRigs.length;i++)carRigs[i].car=cand[i]?cand[i].c:null;
 }
 function applyRig(rig){
   const c=rig.car;
-  if(!c||c.dead||dist2(c.x,c.z,player.x,player.z)>230){
+  if(!c||c.dead){
+    rig.hL.intensity=rig.hR.intensity=rig.tL.intensity=rig.tR.intensity=0;
+    rig.glow.visible=rig.tgL.visible=rig.tgR.visible=false;
+    return;
+  }
+  const d=dist2(c.x,c.z,player.x,player.z);
+  /* зажигаемся при приближении игрока */
+  const fade=clamp((HEAD_OFF-d)/(HEAD_OFF-HEAD_ON),0,1);
+  if(fade<=0){
     rig.hL.intensity=rig.hR.intensity=rig.tL.intensity=rig.tR.intensity=0;
     rig.glow.visible=rig.tgL.visible=rig.tgR.visible=false;
     return;
   }
   const fx=Math.sin(c.angle),fz=Math.cos(c.angle);
   const rxv=Math.cos(c.angle),rzv=-Math.sin(c.angle);
-  rig.hL.intensity=rig.hR.intensity=480;
+  rig.hL.intensity=rig.hR.intensity=480*fade;
   rig.hL.position.set(c.x+fx*4.5-rxv*1.5,1.8,c.z+fz*4.5-rzv*1.5);
   rig.hR.position.set(c.x+fx*4.5+rxv*1.5,1.8,c.z+fz*4.5+rzv*1.5);
   rig.hL.target.position.set(c.x+fx*30-rxv*1.5,0,c.z+fz*30-rzv*1.5);
@@ -726,7 +751,7 @@ function applyRig(rig){
   const bx=c.x-fx*4.7,bz=c.z-fz*4.7;
   rig.tL.position.set(bx-rxv*1.6,1.6,bz-rzv*1.6);
   rig.tR.position.set(bx+rxv*1.6,1.6,bz+rzv*1.6);
-  rig.tL.intensity=rig.tR.intensity=c.braking?85:20;
+  rig.tL.intensity=rig.tR.intensity=(c.braking?85:20)*fade;
   rig.glow.visible=true;
   rig.glow.position.set(c.x+fx*9,.09,c.z+fz*9);
   rig.glow.rotation.y=c.angle;
@@ -749,6 +774,8 @@ headGlow.scale.set(15,1,24);ptGlowL.scale.set(3.5,1,5.5);ptGlowR.scale.set(3.5,1
 scene.add(headGlow,ptGlowL,ptGlowR);
 
 const sirLight=new THREE.PointLight(0xff2233,0,45,1.8);scene.add(sirLight);
+/* мерцающий свет огня на ближайшей горящей машине */
+const burnLight=new THREE.PointLight(0xff7722,0,30,1.8);scene.add(burnLight);
 const fxLights=[];
 function flashLight(x,y,z,color,intensity,dist,ttl){
   const cap=isMobile?2:4;
@@ -1036,7 +1063,7 @@ function getBulletMesh(from){
   m.material.color.set(from==='p'?0xfff2a0:0xff5060);
   m.visible=true;return m;
 }
-const PMAX=240,parts=[];
+const PMAX=300,parts=[];
 const pMesh=new THREE.InstancedMesh(unitBox,new THREE.MeshBasicMaterial({toneMapped:false}),PMAX);
 pMesh.frustumCulled=false;scene.add(pMesh);
 {const w=new THREE.Color(1,1,1);for(let i=0;i<PMAX;i++)pMesh.setColorAt(i,w);}
@@ -1048,7 +1075,8 @@ function spawnParts(x,y,z,n,col,spd,ttl,size,grav){
       life:ttl*rand(.6,1),ttl,size:size*rand(.6,1.3),c,grav:grav===undefined?16:grav});
   }
 }
-const cFire=new THREE.Color(1.4,.7,.15),cFire2=new THREE.Color(1.4,.4,.08),cSmoke=new THREE.Color(.2,.2,.24),
+/* огонь: ярче и крупнее — хорошо видно даже издалека */
+const cFire=new THREE.Color(2.4,1.3,.25),cFire2=new THREE.Color(1.9,.6,.1),cSmoke=new THREE.Color(.22,.22,.26),
 cSpark=new THREE.Color(1.6,1.3,.6),cBlood=new THREE.Color(.5,.06,.1);
 const pickups=[],coinGeo=new THREE.BoxGeometry(.9,.9,.9),coinMat=new THREE.MeshBasicMaterial({color:new THREE.Color(2.2,1.7,.3),toneMapped:false});
 function dropCoin(x,z,val){
@@ -1224,28 +1252,29 @@ function separateCars(){
   }
 }
 
-/* ============ ОГОНЬ И ДЫМ ПОВРЕЖДЁННЫХ МАШИН ============
-   при hp < 45% maxHp из-под капота горит огонь, из капота и
-   багажника идёт дым; интенсивность растёт по мере повреждений */
+/* ============ ОГОНЬ И ДЫМ ПОВРЕЖДЁННЫХ МАШИН (заметнее) ============ */
+let nearestBurning=null;
 function updateCarFires(dt){
+  nearestBurning=null;
+  let bd=1e9;
   for(const car of cars){
     if(car.dead)continue;
     const frac=car.hp/car.maxHp;
     if(frac>BURN_FRAC)continue;
     const fx=Math.sin(car.angle),fz=Math.cos(car.angle);
-    const ex=car.x+fx*3.4,ez=car.z+fz*3.4;      /* капот */
-    const bx=car.x-fx*3.2,bz=car.z-fz*3.2;      /* багажник */
-    /* огонь: ярче при сильных повреждениях */
-    const inten=frac<0.2?1.6:1;
-    if(Math.random()<dt*13*inten)spawnParts(ex,1.5,ez,1,cFire,3.5,.45,.55,-1.5);
-    if(Math.random()<dt*6*inten)spawnParts(ex,1.7,ez,1,cFire2,3,.55,.4,-1.2);
-    /* дым из-под капота */
-    if(Math.random()<dt*5*inten)spawnParts(ex,2,ez,1,cSmoke,1.8,1.7,.9,-2.5);
-    /* дым из багажника при сильных повреждениях */
-    if(frac<0.25&&Math.random()<dt*4)spawnParts(bx,1.8,bz,1,cSmoke,1.6,1.5,.8,-2.2);
-    /* мерцающий отсвет огня на земле рядом с горящей машиной игрока */
-    if(car===player.inCar&&Math.random()<dt*8)
-      spawnParts(ex+rand(-1,1),.5,ez+rand(-1,1),1,cFire,1.2,.3,.7,0);
+    const ex=car.x+fx*3.4,ez=car.z+fz*3.4;
+    const bx=car.x-fx*3.2,bz=car.z-fz*3.2;
+    const inten=frac<0.2?1.7:1;
+    /* крупный яркий огонь: три слоя */
+    if(Math.random()<dt*20*inten)spawnParts(ex,1.6,ez,1,cFire,3.2,.6,1.05,-1.5);
+    if(Math.random()<dt*12*inten)spawnParts(ex,1.8,ez,1,cFire2,3,.7,.85,-1.2);
+    if(Math.random()<dt*7*inten)spawnParts(ex,2,ez,1,cFire,2.2,.5,.6,-1);
+    /* дым */
+    if(Math.random()<dt*6*inten)spawnParts(ex,2.2,ez,1,cSmoke,1.8,1.9,1.1,-2.5);
+    if(frac<0.25&&Math.random()<dt*5)spawnParts(bx,1.9,bz,1,cSmoke,1.6,1.7,1,-2.2);
+    /* свет от пожара */
+    const pd=dist2(car.x,car.z,player.x,player.z);
+    if(pd<150&&pd<bd){bd=pd;nearestBurning=car;}
   }
 }
 
@@ -1328,8 +1357,8 @@ function explodeCar(car){
   car.dead=true;car.deadT=26;car.ai=false;car.speed=0;
   car.bodyMat.color.set(0x18130e);car.lightsM.visible=false;
   if(car.barR){car.barR.visible=false;car.barB.visible=false;}
-  spawnParts(car.x,2,car.z,20,cFire,16,.7,1);
-  spawnParts(car.x,2,car.z,10,cFire2,12,.9,.8);
+  spawnParts(car.x,2,car.z,26,cFire,16,.8,1.3);
+  spawnParts(car.x,2,car.z,12,cFire2,12,1,.9);
   spawnParts(car.x,3,car.z,14,cSmoke,5,1.8,1.4,-2);
   flashLight(car.x,7,car.z,0xff9040,2800,110,.5);
   sBoom();addHeat(.5);money+=40;floatAt(car.x,5,car.z,'+40$','#fcee0a');
@@ -1586,7 +1615,7 @@ function updatePeds(dt){
 function spawnTraffic(n){
   let count=0;for(const c of cars)if(c.ai&&!c.cop)count++;
   let tries=0;
-  while(count<n&&tries<60){
+  while(count<n&&tries<80){
     tries++;
     const ri=1+sri(GRID-1),line=R[ri],vert=Math.random()<.5;
     const dir=vert?(Math.random()<.5?1:3):(Math.random()<.5?0:2);
@@ -1607,7 +1636,7 @@ function despawnTraffic(){
   }
 }
 function spawnParked(){
-  for(let k=0;k<18;k++){
+  for(let k=0;k<26;k++){
     const ri=1+sri(GRID-1),line=R[ri],vert=Math.random()<.5;
     const along=rand(50,WORLD-50),side=Math.random()<.5?1:-1,o=AW+2.6;
     const x=vert?line+side*o:along,z=vert?along:line+side*o;
@@ -1728,15 +1757,6 @@ function syncWorld(){
   for(const c of cops)if(!c.dead)putShadow(c.x,c.z,3);
   if(!player.inCar)putShadow(player.x,player.z,3);
   shadowMesh.count=si;shadowMesh.instanceMatrix.needsUpdate=true;
-  for(let i=0;i<poolWaters.length;i++){
-    poolWaters[i].material.opacity=.4+.15*Math.sin(t*1.6+i*1.3);
-  }
-  for(const g of poolGlints){
-    g.m.position.set(
-      g.bx+Math.sin(t*.55+g.px)*g.ax,.2,
-      g.bz+Math.cos(t*.4+g.pz)*g.az);
-    g.m.material.opacity=.35+.3*Math.sin(t*2.2+g.px+g.pz);
-  }
   if(player.inCar&&!player.inCar.dead){
     const c=player.inCar;
     const fx=Math.sin(c.angle),fz=Math.cos(c.angle);
@@ -1763,6 +1783,13 @@ function syncWorld(){
     headGlow.visible=ptGlowL.visible=ptGlowR.visible=false;
   }
   for(const rig of carRigs)applyRig(rig);
+  /* мерцающий свет пожара ближайшей горящей машины */
+  if(nearestBurning){
+    const c=nearestBurning;
+    const fx=Math.sin(c.angle),fz=Math.cos(c.angle);
+    burnLight.position.set(c.x+fx*3.4,2.5,c.z+fz*3.4);
+    burnLight.intensity=120+Math.sin(t*17)*40+Math.sin(t*31)*25;
+  }else burnLight.intensity=0;
   let bestCop=null,bd=1e9;
   for(const c of cars)if(c.cop&&!c.dead&&!c.player){
     const d=dist2(c.x,c.z,player.x,player.z);
@@ -1774,7 +1801,6 @@ function syncWorld(){
     sirLight.color.set(on?0xff2233:0x2244ff);
     sirLight.intensity=140;
   }else sirLight.intensity=0;
-  /* светофоры: лампы + круглое пятно цвета активного сигнала */
   if(tlHeadMesh&&tlGlowMesh){
     const gOn=new THREE.Color(.35,2.6,.85),rOn=new THREE.Color(2.7,.32,.48);
     const off=new THREE.Color(.34,.37,.43);
@@ -1801,9 +1827,9 @@ function syncWorld(){
 let camCX=player.x,camCZ=player.z,camHcur=76;
 function updateCamera(dt){
   if(state==='menu'){
-    menuAng+=dt*.06;
+    menuAng+=dt*.04;
     camera.up.set(0,1,0);
-    camera.position.set(WORLD/2+Math.sin(menuAng)*230,110,WORLD/2+Math.cos(menuAng)*230);
+    camera.position.set(WORLD/2+Math.sin(menuAng)*330,150,WORLD/2+Math.cos(menuAng)*330);
     camera.lookAt(WORLD/2,0,WORLD/2);
     return;
   }
@@ -1857,7 +1883,6 @@ function drawHUD(){
     const p=Z(r);if(Math.abs(p)<75){mc.beginPath();mc.moveTo(-75,p);mc.lineTo(75,p);mc.stroke();}
     const q=X(r);if(Math.abs(q)<75){mc.beginPath();mc.moveTo(q,-75);mc.lineTo(q,75);mc.stroke();}
   }
-  /* лента периметра на миникарте */
   mc.strokeStyle='#fcee0a';mc.lineWidth=2;
   mc.setLineDash([3,3]);
   mc.strokeRect(X(0),Z(0),WORLD*s,WORLD*s);

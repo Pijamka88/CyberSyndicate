@@ -240,19 +240,18 @@ const DIRS=[{x:1,z:0},{x:0,z:1},{x:-1,z:0},{x:0,z:-1}];
 const DIRA=[Math.PI/2,0,-Math.PI/2,Math.PI];
 const MAG=12,RELOAD_T=1.3,AMMO_COST=30,NOODLE_COST=10;
 const TRAFFIC_N=30,BURN_FRAC=0.45;
-/* фары трафика: полная яркость со 120, разгон 120→190 */
 const HEAD_ON=120,HEAD_OFF=190;
 const EMP_CD=8,EMP_RANGE=28;
 const HIRE_COST=200,MAX_CREW=3;
 const BASE={x:378,z:350},BASE_R={x0:364,z0:339,x1:392,z1:361};
 const SHOP={x:586,z:166},SHOP_R={x0:578,z0:158,x1:594,z1:174};
 const DEALER={x:630,z:215};
-const DEALER_R={x0:612,z0:197,x1:648,z1:233}; /* двор скупщика со стенами */
-const TOWER={x:490,z:490}; /* мега-башня Араскол в центре */
+const DEALER_R={x0:612,z0:197,x1:648,z1:233};
+const TOWER={x:490,z:490};
+const GANG={x0:0,z0:6*CELL,x1:3*CELL,z1:8*CELL};
 function inRect(r,x,z){return x>r.x0&&x<r.x1&&z>r.z0&&z<r.z1;}
 const inBaseRect=(x,z)=>inRect(BASE_R,x,z);
 const inDealerRect=(x,z)=>inRect(DEALER_R,x,z);
-const GANG={x0:0,z0:6*CELL,x1:3*CELL,z1:8*CELL};
 const inGang=(x,z)=>x>=GANG.x0&&x<GANG.x1&&z>=GANG.z0&&z<GANG.z1;
 function districtOf(i,j){
   const cx=GRID/2;
@@ -264,7 +263,6 @@ function districtOf(i,j){
 function laneOff(d){return d===0?{x:0,z:LANE}:d===1?{x:-LANE,z:0}:d===2?{x:0,z:-LANE}:{x:LANE,z:0};}
 function nearestLine(v){let best=R[0],bd=1e9;for(const r of R){const d=Math.abs(v-r);if(d<bd){bd=d;best=r;}}return best;}
 function lightGreen(axis,ci,cj){const ph=(gameTime/7+ci*0.37+cj*0.53)%1;return axis===(ph<0.55?0:1);}
-
 /* ============ РЕНДЕР ============ */
 const canvas=document.getElementById('game');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
